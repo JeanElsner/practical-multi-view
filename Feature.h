@@ -2,6 +2,7 @@
 #define FEATURE_H
 
 #include <opencv2/core.hpp>
+#include <vector>
 
 class Feature
 {
@@ -21,7 +22,7 @@ public:
 	/**
 		Creates an OpenCV point based on this feature
 
-		@returns OpenCV point with this feature's coordinates
+		@return OpenCV point with this feature's coordinates
 	*/
 	cv::Point point();
 
@@ -29,8 +30,35 @@ public:
 		Calculates the distance from this to the given feature
 
 		@param f The target feature
-		@returns Distance between the features
+		@return Distance between the features
 	*/
 	float distance(const Feature& f);
+
+	/**
+		Checks whether this feature has any neighbors within
+		a given (Manhattan) distance.
+
+		@param feats A list of features to check against
+		@param dist The distance in pixels
+		@return True if a neigihbor was found, false otherwise
+	*/
+	bool hasNeighbor(const std::vector<Feature> feats, int dist = 3);
+
+	friend bool operator== (const Feature& lhs, const Feature& rhs);
+	friend bool operator!= (const Feature& lhs, const Feature& rhs);
+
+	/**
+		Scale this feature's coordinates by a factor
+
+		@param scale Scale factor
+	*/
+	void scale(float scale);
+
+	/**
+		Scale the features' coordinates by a factor
+
+		@param scale Scale Factor
+	*/
+	static void scale(std::vector<Feature>& feats, float scale);
 };
 #endif

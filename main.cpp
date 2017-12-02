@@ -15,18 +15,6 @@ unsigned char GRID_SIZE[2] = { 255, 255 };
 
 std::vector<double> ticktock;
 
-bool operator== (const Feature& lhs, const Feature& rhs)
-{
-	if (lhs.row == rhs.row && lhs.column == rhs.column)
-		return true;
-	return false;
-}
-
-bool operator!= (const Feature& lhs, const Feature& rhs)
-{
-	return !(lhs == rhs);
-}
-
 /**
 	Starts a timer, will be tiered if called multiple times
 */
@@ -47,25 +35,6 @@ double tock()
 	double tock = ticktock.back();
 	ticktock.pop_back();
 	return (getTickCount() - tock) / getTickFrequency();
-}
-
-/**
-	Checks whether a feature has any neighbors within
-	a given (Manhattan) distance.
-
-	@param f The feature to check
-	@param feats A list of features to check against
-	@param distance The distance in pixels
-	@returns True if a neigihbor was found, false otherwise
-*/
-bool has_neighbor(const Feature f, const vector<Feature> feats, int distance = 3)
-{
-	for (auto const& ff : feats)
-	{
-		if (abs(ff.row - f.row) < distance && abs(ff.column - f.column) < distance)
-			return true;
-	}
-	return false;
 }
 
 /**
@@ -96,11 +65,11 @@ vector<Feature> grid_feature_extraction(Frame& I, const unsigned char size[2], c
 			{
 				int count = 0;
 				vector<Feature> new_feats = func(roi, roi_H, r, c);
-				for (auto const& f : new_feats)
+				for (auto& f : new_feats)
 				{
 					if (count >= fn)
 						break;
-					if (!has_neighbor(f, feats))
+					if (!f.hasNeighbor(feats))
 					{
 						count++;
 						feats.push_back(f);
@@ -325,16 +294,6 @@ void track_features(Frame& f_src, const Frame& f_next, const vector<Feature>& fe
 		corr.row = (int)round((double)f.row + v[1]);
 		new_feats.push_back(corr);
 
-	}
-}
-
-// TODO: doc
-void scale_feats(vector<Feature>& feats, float scale)
-{
-	for (auto & f : feats)
-	{
-		f.column = (int)((float)f.column*scale);
-		f.row = (int)((float)f.row*scale);
 	}
 }
 
