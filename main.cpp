@@ -7,6 +7,8 @@
 #include <iostream>
 #include "Feature.h"
 #include "Frame.h"
+#include "BaseFeatureExtractor.h"
+#include "OpenCVGoodFeatureExtractor.h"
 
 using namespace cv;
 using namespace std;
@@ -47,7 +49,7 @@ double tock()
 	@param extr Vector of functions used to extract features
 */
 vector<Feature> grid_feature_extraction(Frame& I, const unsigned char size[2], const int fn,
-	vector<vector<Feature>(*)(const Mat&, const Mat&, int row_offset, int col_offset)> extr)
+	vector<BaseFeatureExtractor*> extr)
 {
 	int gr = I.bw.rows / size[0];
 	int gc = I.bw.cols / size[1];
@@ -58,15 +60,16 @@ vector<Feature> grid_feature_extraction(Frame& I, const unsigned char size[2], c
 		for (int c = 0; c < I.bw.cols; c += size[1])
 		{
 			Rect rec(c, r, min((int)size[1], I.bw.cols - c), min((int)size[0], I.bw.rows - r));
-			Mat roi = I.bw(rec);
-			Mat roi_H = I.getHarrisMatrix()(rec);
+			Frame roi = I.regionOfInterest(rec);
 			
-			for (auto const& func : extr)
+			for (auto& e : extr)
 			{
 				int count = 0;
-				vector<Feature> new_feats = func(roi, roi_H, r, c);
+				vector<Feature> new_feats = e->extractFeatures(roi, fn);
 				for (auto& f : new_feats)
 				{
+					f.column = c + f.column;
+					f.row = r + f.row;
 					if (count >= fn)
 						break;
 					if (!f.hasNeighbor(feats))
@@ -109,48 +112,51 @@ void gaussian_window_3x3(const Mat& src, Mat& dst)
 }
 
 // TODO: doc
-void compute_shi_tomasi_response(const Mat& H, Mat& dst, float quality = .4)
+void compute_shi_tomasi_response(const Mat& H, Mat& dst, float quality = .3)
 {
 	for (int r = 0; r < H.rows; r++)
 	{
-		const float* p_H = H.ptr<float>(r);
-		float* p_dst = dst.ptr<float>(r);
+		const double* p_H = H.ptr<double>(r);
+		double* p_dst = dst.ptr<double>(r);
 
 		for (int c = 0; c < (H.cols-1)*3; c +=3)
 		{
-			float Ixx = p_H[c + 0];
-			float Iyy = p_H[c + 1];
-			float Ixy = p_H[c + 2];
+			double Ixx = p_H[c + 0];
+			double Iyy = p_H[c + 1];
+			double Ixy = p_H[c + 2];
 
-			float B = -Ixx - Iyy;
-			float C = Ixx*Iyy - pow(Ixy, 2);
+			double B = -Ixx - Iyy;
+			double C = Ixx*Iyy - pow(Ixy, 2);
 
-			float lambda_1 = (-B + sqrt(pow(B, 2) - 4 * C)) / 2;
-			float lambda_2 = (-B - sqrt(pow(B, 2) - 4 * C)) / 2;
+			double lambda_1 = (-B + sqrt(pow(B, 2) - 4 * C)) / 2;
+			double lambda_2 = (-B - sqrt(pow(B, 2) - 4 * C)) / 2;
 
 			//p_dst[c / 3] = lambda_1*lambda_2 - 0.04f*pow(lambda_1 +lambda_2, 2);
 			p_dst[c / 3] = min(lambda_1, lambda_2);
 		}
 	}
-	double r_min, r_max;
-	minMaxLoc(dst, &r_min, &r_max);
-	threshold(dst, dst, r_max*quality, 255, CV_THRESH_BINARY);
 }
 
 // TODO: doc
 vector<Feature> shi_tomasi_detector(const Mat& src, const Mat& H, int row_offset=0, int col_offset=0)
 {
-	Mat R(src.size(), CV_32FC1);
+	Mat R(src.size(), CV_64FC1);
 	compute_shi_tomasi_response(H, R);
 	vector<Feature> feats;
-	
+
+	Mat thresh(src.size(), CV_64FC1);
+	double r_min, r_max;
+	minMaxLoc(R, &r_min, &r_max);
+	threshold(R, thresh, r_max*0.4, 255, CV_THRESH_BINARY);
+
 	for (int j = 0; j < src.rows; j++)
 	{
-		float* p_R = R.ptr<float>(j);
+		double* p_thresh = thresh.ptr<double>(j);
+		double* p_R = R.ptr<double>(j);
 
 		for (int i = 0; i < src.cols; i++)
 		{
-			if (p_R[i] == 255)
+			if (p_thresh[i] == 255)
 			{
 				Feature f;
 				f.row = j + row_offset;
@@ -159,24 +165,6 @@ vector<Feature> shi_tomasi_detector(const Mat& src, const Mat& H, int row_offset
 				feats.push_back(f);
 			}
 		}
-	}
-	return feats;
-}
-
-// TODO: doc
-vector<Feature> opencv_good_features(const Mat& src, const Mat& H, int row_offset = 0, int col_offset = 0)
-{
-	vector<Point2f> corners;
-	goodFeaturesToTrack(src, corners, 100, 0.01, 5, Mat(), 3, 3, false, 0.04);
-
-	vector<Feature> feats;
-	for (auto const& c : corners)
-	{
-		Feature f;
-		f.row = c.y+row_offset;
-		f.column = c.x + col_offset;
-		f.detector = Feature::extractor::cv_good;
-		feats.push_back(f);
 	}
 	return feats;
 }
@@ -357,12 +345,12 @@ float compare_features(const Mat& src, int src_x, int src_y, const Mat& cmp, int
 }
 
 // TODO: doc
-void knn_tracker(const Frame& f_src, Frame& f_cmp, vector<Feature> feats, 
+/*void knn_tracker(const Frame& f_src, Frame& f_cmp, vector<Feature> feats, 
 	vector<Feature>& new_feats, vector<bool>& tracked, int window = 31, float threshold = 2)
 {
-	vector<vector<Feature>(*)(const Mat&, const Mat&, int row_offset, int col_offset)> funcs;
+	vector<BaseFeatureExtractor> funcs;
 	//funcs.push_back(shi_tomasi_detector);
-	funcs.push_back(opencv_good_features);
+	funcs.push_back(OpenCVGoodFeatureExtractor());
 
 	vector<Feature> cmp_feats = grid_feature_extraction(f_cmp, GRID_SIZE, 35, funcs);
 
@@ -388,7 +376,7 @@ void knn_tracker(const Frame& f_src, Frame& f_cmp, vector<Feature> feats,
 			tracked.push_back(false);
 		new_feats.push_back(best_fit);
 	}
-}
+}*/
 
 int main(int argc, char** argv)
 {
@@ -416,9 +404,9 @@ int main(int argc, char** argv)
 
 		I.push_back(frame);
 		
-		vector<vector<Feature>(*)(const Mat&, const Mat&, int row_offset, int col_offset)> funcs;
-		funcs.push_back(shi_tomasi_detector);
-		funcs.push_back(opencv_good_features);
+		vector<BaseFeatureExtractor*> funcs;
+		funcs.push_back(&OpenCVGoodFeatureExtractor());
+		//funcs.push_back(opencv_good_features);
 
 		/*
 		Mat H(im.size(), CV_32FC3);
@@ -440,7 +428,7 @@ int main(int argc, char** argv)
 		{
 			Mat H = frame.getHarrisMatrix();
 			G.push_back(H);
-			feats = grid_feature_extraction(frame, GRID_SIZE, 35, funcs);
+			feats = grid_feature_extraction(frame, GRID_SIZE, 25, funcs);
 
 			video = VideoWriter("../../my-feats/tracker.avi", CV_FOURCC('M', 'J', 'P', 'G'), 10, frame.bw.size());
 		}

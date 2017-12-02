@@ -15,7 +15,6 @@ void Frame::init()
 {
 	bw = cv::Mat(orig.size(), CV_32FC1);
 	cv::cvtColor(orig, bw, cv::COLOR_BGR2GRAY);
-	harris = cv::Mat(orig.size(), CV_32FC3);
 }
 
 cv::Mat& Frame::getSpatialGradientX()
@@ -68,9 +67,34 @@ cv::Mat& Frame::getHarrisMatrix()
 		computeHarrisMatrix();
 	return harris;
 }
+#include <opencv2\highgui.hpp>
+Frame Frame::regionOfInterest(cv::Rect & rect)
+{
+	Frame f_new;
+	f_new.orig = orig(rect);
+	f_new.bw = bw(rect);
+	
+	f_new.computed_gradient = false;
+	f_new.computed_harris = false;
+
+	if (computed_gradient)
+	{
+		f_new.computed_gradient = true;
+		f_new.grad_x = grad_x(rect);
+		f_new.grad_y = grad_y(rect);
+	}
+
+	if (computed_harris)
+	{
+		computed_harris = true;
+		f_new.harris = harris(rect);
+	}
+	return f_new;
+}
 
 void Frame::computeHarrisMatrix()
 {
+	harris = cv::Mat(orig.size(), CV_64FC3);
 	cv::Mat* Ix = &getSpatialGradientX();
 	cv::Mat* Iy = &getSpatialGradientY();
 

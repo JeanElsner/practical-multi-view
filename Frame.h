@@ -16,6 +16,8 @@ private:
 	void computeHarrisMatrix();
 	void init();
 
+	Frame() { }
+
 public:
 	cv::Mat orig, bw;
 
@@ -63,5 +65,14 @@ public:
 		@return True if frame is empty
 	*/
 	bool isEmpty() { return orig.empty(); }
+
+	/**
+		Returns a region of interest of this frame,
+		including all the computed moments etc.
+
+		@param rect A rectangular describing the region of interest
+		@return New frame confined to the ROI
+	*/
+	Frame regionOfInterest(cv::Rect& rect);
 };
 #endif
