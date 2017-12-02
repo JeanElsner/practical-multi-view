@@ -5,51 +5,24 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/features2d.hpp>
 #include <iostream>
-#include <string>
+#include "Feature.h"
+#include "Frame.h"
 
 using namespace cv;
 using namespace std;
-
-#define DETECTOR_CVGOOD		1
-#define DETECTOR_SHITOMASI	2
 
 unsigned char GRID_SIZE[2] = { 255, 255 };
 
 std::vector<double> ticktock;
 
-struct feature {
-	int row;
-	int column;
-	unsigned char detector;
-	bool tracked;
-
-	feature(int x, int y)
-	{
-		row = y;
-		column = x;
-	}
-
-	feature() { }
-
-	cv::Point point()
-	{
-		return cv::Point(column, row);
-	}
-
-	float distance(const feature& f)
-	{
-		return sqrt(pow(f.column - column, 2) + pow(f.row - row, 2));
-	}
-};
-
-bool operator== (const feature& lhs, const feature& rhs)
+bool operator== (const Feature& lhs, const Feature& rhs)
 {
 	if (lhs.row == rhs.row && lhs.column == rhs.column)
 		return true;
 	return false;
 }
 
-bool operator!= (const feature& lhs, const feature& rhs)
+bool operator!= (const Feature& lhs, const Feature& rhs)
 {
 	return !(lhs == rhs);
 }
@@ -85,7 +58,7 @@ double tock()
 	@param distance The distance in pixels
 	@returns True if a neigihbor was found, false otherwise
 */
-bool has_neighbor(const feature f, const vector<feature> feats, int distance = 3)
+bool has_neighbor(const Feature f, const vector<Feature> feats, int distance = 3)
 {
 	for (auto const& ff : feats)
 	{
@@ -104,25 +77,25 @@ bool has_neighbor(const feature f, const vector<feature> feats, int distance = 3
 	@param fn The number of features per block
 	@param extr Vector of functions used to extract features
 */
-vector<feature> grid_feature_extraction(const Mat& I, const Mat& H, const unsigned char size[2], const int fn,
-	vector<vector<feature>(*)(const Mat&, const Mat&, int row_offset, int col_offset)> extr)
+vector<Feature> grid_feature_extraction(Frame& I, const unsigned char size[2], const int fn,
+	vector<vector<Feature>(*)(const Mat&, const Mat&, int row_offset, int col_offset)> extr)
 {
-	int gr = I.rows / size[0];
-	int gc = I.cols / size[1];
-	vector<feature> feats;
+	int gr = I.bw.rows / size[0];
+	int gc = I.bw.cols / size[1];
+	vector<Feature> feats;
 
-	for (int r = 0; r < I.rows; r += size[0])
+	for (int r = 0; r < I.bw.rows; r += size[0])
 	{
-		for (int c = 0; c < I.cols; c += size[1])
+		for (int c = 0; c < I.bw.cols; c += size[1])
 		{
-			Rect rec(c, r, min((int)size[1], I.cols - c), min((int)size[0], I.rows - r));
-			Mat roi = I(rec);
-			Mat roi_H = H(rec);
+			Rect rec(c, r, min((int)size[1], I.bw.cols - c), min((int)size[0], I.bw.rows - r));
+			Mat roi = I.bw(rec);
+			Mat roi_H = I.getHarrisMatrix()(rec);
 			
 			for (auto const& func : extr)
 			{
 				int count = 0;
-				vector<feature> new_feats = func(roi, roi_H, r, c);
+				vector<Feature> new_feats = func(roi, roi_H, r, c);
 				for (auto const& f : new_feats)
 				{
 					if (count >= fn)
@@ -167,75 +140,6 @@ void gaussian_window_3x3(const Mat& src, Mat& dst)
 }
 
 // TODO: doc
-void compute_spatial_gradient(const Mat& src, vector<Mat>& dst)
-{
-	Mat Ix, Iy;
-	Ix = Mat::zeros(src.size(), CV_64FC1);
-	Iy = Mat::zeros(src.size(), CV_64FC1);
-
-	for (int r = 1; r < src.rows - 1; r++)
-	{
-		const schar* prev = src.ptr<schar>(r - 1);
-		const schar* curr = src.ptr<schar>(r);
-		const schar* next = src.ptr<schar>(r + 1);
-
-		double* p_Ix = Ix.ptr<double>(r);
-		double* p_Iy = Iy.ptr<double>(r);
-
-		for (int c = 1; c < src.cols - 1; c++)
-		{
-			//p_Ix[c] = 1. * curr[c - 1] - 2. * curr[c] + 1. * curr[c + 1];
-			//p_Iy[c] = 1. * prev[c] - 2. * curr[c] + 1. * next[c];
-
-			p_Ix[c] = 1. / 2. * curr[c + 1] - 1. / 2. * curr[c - 1];
-			p_Iy[c] = 1. / 2.*next[c] - 1. / 2.*prev[c];
-			/*p_Ix[c] = 1.*prev[c - 1] - 1.*prev[c + 1] + 2. * curr[c - 1] 
-				- 2. * curr[c + 1] + 1.*next[c - 1] - 1.*next[c + 1];
-			p_Iy[c] = 1.*prev[c - 1] + 2.*prev[c] +  1.*prev[c  + 1] 
-				- 1.*next[c - 1] - 2.*next[c] - 1.*next[c  + 1];*/
-		}
-	}
-	dst.push_back(Ix);
-	dst.push_back(Iy);
-}
-
-/**
-	Calculates the Harris matrix for a given image
-	and stores Ixx, Iyy and Ixy in the three channels
-	of the destination matrix. A 3x3 sobel filter and a
-	3x3 gaussian window is used to computer the derivatives.
-
-	@param src Source Image
-	@param dst Destination, should have at least 3 channels
-*/
-void compute_harris_matrix(const Mat& src, Mat& dst)
-{
-	vector<Mat> grad;
-	compute_spatial_gradient(src, grad);
-	Mat Ix = grad[0];
-	Mat Iy = grad[1];
-
-	Mat Ixx = Ix.mul(Ix);
-	Mat Iyy = Iy.mul(Iy);
-	Mat Ixy = Ix.mul(Ix);
-
-	/*gaussian_window_3x3(Ixx, Ixx);
-	gaussian_window_3x3(Iyy, Iyy);
-	gaussian_window_3x3(Ixy, Ixy);*/
-
-	vector<Mat> channels(3);
-	split(dst, channels);
-	channels[0] = Ixx;
-	channels[1] = Iyy;
-	channels[2] = Ixy;
-	merge(channels, dst);
-
-
-	blur(dst, dst, Size(3, 3));
-
-}
-
-// TODO: doc
 void compute_shi_tomasi_response(const Mat& H, Mat& dst, float quality = .4)
 {
 	for (int r = 0; r < H.rows; r++)
@@ -265,11 +169,11 @@ void compute_shi_tomasi_response(const Mat& H, Mat& dst, float quality = .4)
 }
 
 // TODO: doc
-vector<feature> shi_tomasi_detector(const Mat& src, const Mat& H, int row_offset=0, int col_offset=0)
+vector<Feature> shi_tomasi_detector(const Mat& src, const Mat& H, int row_offset=0, int col_offset=0)
 {
 	Mat R(src.size(), CV_32FC1);
 	compute_shi_tomasi_response(H, R);
-	vector<feature> feats;
+	vector<Feature> feats;
 	
 	for (int j = 0; j < src.rows; j++)
 	{
@@ -279,10 +183,10 @@ vector<feature> shi_tomasi_detector(const Mat& src, const Mat& H, int row_offset
 		{
 			if (p_R[i] == 255)
 			{
-				feature f;
+				Feature f;
 				f.row = j + row_offset;
 				f.column = i + col_offset;
-				f.detector = DETECTOR_SHITOMASI;
+				f.detector = Feature::extractor::shi_tomasi;
 				feats.push_back(f);
 			}
 		}
@@ -291,18 +195,18 @@ vector<feature> shi_tomasi_detector(const Mat& src, const Mat& H, int row_offset
 }
 
 // TODO: doc
-vector<feature> opencv_good_features(const Mat& src, const Mat& H, int row_offset = 0, int col_offset = 0)
+vector<Feature> opencv_good_features(const Mat& src, const Mat& H, int row_offset = 0, int col_offset = 0)
 {
 	vector<Point2f> corners;
 	goodFeaturesToTrack(src, corners, 100, 0.01, 5, Mat(), 3, 3, false, 0.04);
 
-	vector<feature> feats;
+	vector<Feature> feats;
 	for (auto const& c : corners)
 	{
-		feature f;
+		Feature f;
 		f.row = c.y+row_offset;
 		f.column = c.x + col_offset;
-		f.detector = DETECTOR_CVGOOD;
+		f.detector = Feature::extractor::cv_good;
 		feats.push_back(f);
 	}
 	return feats;
@@ -326,10 +230,12 @@ uchar bilinear_subpixel(const Mat& src, float sub_x, float sub_y)
 }
 
 // TODO: doc
-void track_features(const Mat& src, const Mat& next, const vector<feature>& feats, vector<feature>& new_feats, int window = 15, int iter = 5)
+void track_features(Frame& f_src, const Frame& f_next, const vector<Feature>& feats, vector<Feature>& new_feats, int window = 15, int iter = 5)
 {
 	vector<Mat> grad;
-	compute_spatial_gradient(src, grad);
+	grad.push_back(f_src.getSpatialGradientX());
+	grad.push_back(f_src.getSpatialGradientY());
+	
 	int _win = ceil((float)window / 2.f);
 
 	for (auto const& f : feats)
@@ -341,8 +247,8 @@ void track_features(const Mat& src, const Mat& next, const vector<feature>& feat
 		{
 			for (schar y = -_win; y < _win+1; y++)
 			{
-				if (f.column + x < 0 || f.column + x >= src.cols
-					|| f.row + y < 0 || f.row + y >= src.rows)
+				if (f.column + x < 0 || f.column + x >= f_src.bw.cols
+					|| f.row + y < 0 || f.row + y >= f_src.bw.rows)
 					continue;
 				G.at<double>(Point(0, 0)) += pow(grad[0].at<double>(Point(f.column + x, f.row + y)), 2);
 				G.at<double>(Point(1, 1)) += pow(grad[1].at<double>(Point(f.column + x, f.row + y)), 2);
@@ -364,11 +270,11 @@ void track_features(const Mat& src, const Mat& next, const vector<feature>& feat
 			{
 				for (schar y = -_win; y < _win+1; y++)
 				{
-					if (f.column + x + v[0] < 0 || f.column + x + v[0] + 1 > src.cols
-						|| f.row + y + v[1] < 0 || f.row + y + v[1] + 1 > src.rows)
+					if (f.column + x + v[0] < 0 || f.column + x + v[0] + 1 > f_src.bw.cols
+						|| f.row + y + v[1] < 0 || f.row + y + v[1] + 1 > f_src.bw.rows)
 						continue;
-					if (f.column + x < 1 || f.column + x + 1 >= next.cols
-						|| f.row + y < 1 || f.row + y + 1 >= next.rows)
+					if (f.column + x < 1 || f.column + x + 1 >= f_next.bw.cols
+						|| f.row + y < 1 || f.row + y + 1 >= f_next.bw.rows)
 						continue;
 
 					/*double Ix = (double)src.at<uchar>(Point(f.column + x + 1, f.row + y))
@@ -378,16 +284,16 @@ void track_features(const Mat& src, const Mat& next, const vector<feature>& feat
 					Ix *= 1. / 2.;
 					Iy *= 1. / 2.;*/
 
-					b.at<double>(Point(0, 0)) += (((double)src.at<uchar>(Point(f.column + x, f.row + y)) -
+					b.at<double>(Point(0, 0)) += (((double)f_src.bw.at<uchar>(Point(f.column + x, f.row + y)) -
 						//(double)next.at<uchar>(Point(f.column + x + v[0], f.row + y + v[1]))) * 
-						(double)bilinear_subpixel(next, (float)f.column + (float)x + v[0], (float)f.row + (float)y + v[1])) *
+						(double)bilinear_subpixel(f_next.bw, (float)f.column + (float)x + v[0], (float)f.row + (float)y + v[1])) *
 						grad[0].at<double>(Point(f.column + x, f.row + y)));
 						//(double)bilinear_subpixel(next, (float)f.column + (float)x + v[0], (float)f.row + (float)y + v[1])) * Ix;
 						//sqrt(H.at<Vec3f>(Point(f.column + x, f.row + y))[0]);
 						//H.at<Vec3f>(Point(f.column + x, f.row + y))[0];
-					b.at<double>(Point(0, 1)) += (((double)src.at<uchar>(Point(f.column + x, f.row + y)) -
+					b.at<double>(Point(0, 1)) += (((double)f_src.bw.at<uchar>(Point(f.column + x, f.row + y)) -
 						//(double)next.at<uchar>(Point(f.column + x + v[0], f.row + y + v[1]))) *
-						(double)bilinear_subpixel(next, (float)f.column + (float)x + v[0], (float)f.row + (float)y + v[1])) *
+						(double)bilinear_subpixel(f_next.bw, (float)f.column + (float)x + v[0], (float)f.row + (float)y + v[1])) *
 						grad[1].at<double>(Point(f.column + x, f.row + y)));
 						//(double)bilinear_subpixel(next, (float)f.column + (float)x + v[0], (float)f.row + (float)y + v[1])) * Iy;
 						//sqrt(H.at<Vec3f>(Point(f.column + x, f.row + y))[1]);sqrt(H.at<Vec3f>(Point(f.column + x, f.row + y))[1]);
@@ -410,7 +316,7 @@ void track_features(const Mat& src, const Mat& next, const vector<feature>& feat
 			v[0] += err.at<double>(Point(0, 0));
 			v[1] += err.at<double>(Point(0, 1));
 		}
-		feature corr;
+		Feature corr;
 		if ((pow(err.at<double>(Point(0, 0)), 2) + pow(err.at<double>(Point(0, 1)), 2)) > 1)
 			corr.tracked = false;
 		else
@@ -423,7 +329,7 @@ void track_features(const Mat& src, const Mat& next, const vector<feature>& feat
 }
 
 // TODO: doc
-void scale_feats(vector<feature>& feats, float scale)
+void scale_feats(vector<Feature>& feats, float scale)
 {
 	for (auto & f : feats)
 	{
@@ -433,10 +339,10 @@ void scale_feats(vector<feature>& feats, float scale)
 }
 
 // TODO: doc
-vector<feature> knn_features(feature& f, const vector<feature>& feats, int n = 7)
+vector<Feature> knn_features(Feature& f, const vector<Feature>& feats, int n = 7)
 {
-	vector<feature> nearest_vec;
-	feature nearest;
+	vector<Feature> nearest_vec;
+	Feature nearest;
 	
 	for (int k = 0; k < n; k++)
 	{
@@ -492,26 +398,24 @@ float compare_features(const Mat& src, int src_x, int src_y, const Mat& cmp, int
 }
 
 // TODO: doc
-void knn_tracker(const Mat& src, const Mat& cmp, vector<feature> feats, 
-	vector<feature>& new_feats, vector<bool>& tracked, int window = 31, float threshold = 2)
+void knn_tracker(const Frame& f_src, Frame& f_cmp, vector<Feature> feats, 
+	vector<Feature>& new_feats, vector<bool>& tracked, int window = 31, float threshold = 2)
 {
-	vector<vector<feature>(*)(const Mat&, const Mat&, int row_offset, int col_offset)> funcs;
+	vector<vector<Feature>(*)(const Mat&, const Mat&, int row_offset, int col_offset)> funcs;
 	//funcs.push_back(shi_tomasi_detector);
 	funcs.push_back(opencv_good_features);
 
-	Mat H(cmp.size(), CV_32FC3);
-	compute_harris_matrix(cmp, H);
-	vector<feature> cmp_feats = grid_feature_extraction(cmp, H, GRID_SIZE, 35, funcs);
+	vector<Feature> cmp_feats = grid_feature_extraction(f_cmp, GRID_SIZE, 35, funcs);
 
 	for (auto & f : feats)
 	{
-		vector<feature> nn = knn_features(f, cmp_feats);
-		feature best_fit;
+		vector<Feature> nn = knn_features(f, cmp_feats);
+		Feature best_fit;
 		float err = 0;
 
 		for (auto const& ff : nn)
 		{
-			float _err = compare_features(src, f.column, f.row, cmp, ff.column, ff.row, window);
+			float _err = compare_features(f_src.bw, f.column, f.row, f_cmp.bw, ff.column, ff.row, window);
 
 			if (_err < err || err == 0)
 			{
@@ -533,11 +437,11 @@ int main(int argc, char** argv)
 		return -1;
 	cv::String path(argv[1]);
 	vector<cv::String> fn;
-	vector<cv::Mat> I;
-	vector<cv::Mat> G;
 	cv::glob(path, fn, true);
 
-	vector<feature> feats;
+	vector<Frame> I;
+	vector<Mat> G;
+	vector<Feature> feats;
 
 	VideoWriter video;
 
@@ -546,21 +450,17 @@ int main(int argc, char** argv)
 	{
 		//if (k > 2) break;
 
-		Mat imc = cv::imread(fn[k], IMREAD_COLOR);
+		Frame frame(fn[k]);
 		
-		if (imc.empty())
+		if (frame.isEmpty())
 			continue;
 
-		Mat im(imc.size(), CV_32FC1);
-		cvtColor(imc, im, COLOR_BGR2GRAY);
-
-		I.push_back(im);
+		I.push_back(frame);
 		
-		vector<vector<feature>(*)(const Mat&, const Mat&, int row_offset, int col_offset)> funcs;
+		vector<vector<Feature>(*)(const Mat&, const Mat&, int row_offset, int col_offset)> funcs;
 		funcs.push_back(shi_tomasi_detector);
 		funcs.push_back(opencv_good_features);
 
-		
 		/*
 		Mat H(im.size(), CV_32FC3);
 		compute_harris_matrix(im, H);
@@ -579,12 +479,11 @@ int main(int argc, char** argv)
 		
 		if (k == 0)
 		{
-			Mat H(im.size(), CV_32FC3);
-			compute_harris_matrix(im, H);
+			Mat H = frame.getHarrisMatrix();
 			G.push_back(H);
-			feats = grid_feature_extraction(im, H, GRID_SIZE, 35, funcs);
+			feats = grid_feature_extraction(frame, GRID_SIZE, 35, funcs);
 
-			video = VideoWriter("../../my-feats/tracker.avi", CV_FOURCC('M', 'J', 'P', 'G'), 10, imc.size());
+			video = VideoWriter("../../my-feats/tracker.avi", CV_FOURCC('M', 'J', 'P', 'G'), 10, frame.bw.size());
 		}
 		
 		//////////////////////////////
@@ -632,14 +531,14 @@ int main(int argc, char** argv)
 		{
 			vector<uchar> status;
 			vector<float> err;
-			calcOpticalFlowPyrLK(I[k - 1], I[k], points, next_points, status, err, Size(31, 31), 8);
+			calcOpticalFlowPyrLK(I[k - 1].bw, I[k].bw, points, next_points, status, err, Size(31, 31), 8);
 			
 			for (int i = 0; i < next_points.size(); i++)
 			{
 				if (status[i])
 				{
-					circle(imc, next_points[i], 5, Scalar(0, 255, 255));
-					line(imc, points[i], next_points[i], Scalar(0, 255, 255));
+					circle(frame.orig, next_points[i], 5, Scalar(0, 255, 255));
+					line(frame.orig, points[i], next_points[i], Scalar(0, 255, 255));
 					points.push_back(next_points[i]);
 				}
 			}
@@ -647,11 +546,11 @@ int main(int argc, char** argv)
 
 			for (auto const& p : next_points)
 			{
-				feats.push_back(feature(p.x, p.y));
+				feats.push_back(Feature(p.x, p.y));
 			}
 		}
-		imshow("test", imc);
-		video.write(imc);
+		imshow("test", frame.orig);
+		video.write(frame.orig);
 		waitKey(20);
 		
 		
@@ -720,7 +619,7 @@ int main(int argc, char** argv)
 		stringstream f;
 		f << "../../my-feats/" << k << ".png";
 		string ff; f >> ff;
-		cv::imwrite(ff, imc);
+		cv::imwrite(ff, frame.orig);
 	}
 	video.release();
 	cout << tock();
