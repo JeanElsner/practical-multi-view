@@ -10,6 +10,8 @@
 #include "BaseFeatureExtractor.h"
 #include "OpenCVGoodFeatureExtractor.h"
 #include "ShiTomasiFeatureExtractor.h"
+#include "OpenCVLucasKanadeFM.h"
+#include "Tracker.h"
 
 using namespace cv;
 using namespace std;
@@ -343,6 +345,9 @@ int main(int argc, char** argv)
 
 	VideoWriter video;
 
+	BaseFeatureMatcher* matcher = &OpenCVLucasKanadeFM();
+	Tracker tracker();
+
 	tick();
 	for (size_t k = 0; k < fn.size(); ++k)
 	{
@@ -414,34 +419,20 @@ int main(int argc, char** argv)
 		// Opencv lukas-kanade tracker
 		////////////////////////////////
 		
-		vector<Point2f> points, next_points;
-
-		for (auto const& f : feats)
-		{
-			points.push_back(Point2f(f.column, f.row));
-		}
-		
 		if (k > 0)
 		{
-			vector<uchar> status;
-			vector<float> err;
-			calcOpticalFlowPyrLK(I[k - 1].bw, I[k].bw, points, next_points, status, err, Size(31, 31), 8);
-			
-			for (int i = 0; i < next_points.size(); i++)
+			std::vector<Feature> new_feats;
+			matcher->matchFeatures(I[k - 1], I[k], feats, new_feats);
+
+			for (int i = 0; i < new_feats.size(); i++)
 			{
-				if (status[i])
+				if (new_feats[i].tracked)
 				{
-					circle(frame.orig, next_points[i], 5, Scalar(0, 255, 255));
-					line(frame.orig, points[i], next_points[i], Scalar(0, 255, 255));
-					points.push_back(next_points[i]);
+					circle(frame.orig, new_feats[i].point(), 5, Scalar(0, 255, 255));
+					line(frame.orig, feats[i].point(), new_feats[i].point(), Scalar(0, 255, 255));
 				}
 			}
-			feats.clear();
-
-			for (auto const& p : next_points)
-			{
-				feats.push_back(Feature(p.x, p.y));
-			}
+			feats = new_feats;
 		}
 		imshow("test", frame.orig);
 		video.write(frame.orig);
