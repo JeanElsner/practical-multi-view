@@ -1,6 +1,7 @@
 #include "ShiTomasiFeatureExtractor.h"
 #include <functional>
 #include <iostream>
+
 std::vector<Feature> ShiTomasiFeatureExtractor::extractFeatures(Frame & src, int max)
 {
 	cv::Mat R = computeShiTomasiResponse(src);
@@ -9,7 +10,7 @@ std::vector<Feature> ShiTomasiFeatureExtractor::extractFeatures(Frame & src, int
 	cv::Mat thresh(src.bw.size(), CV_64FC1);
 	double r_min, r_max;
 	minMaxLoc(R, &r_min, &r_max);
-	threshold(R, thresh, r_max*0.4, 255, CV_THRESH_BINARY);
+	threshold(R, thresh, r_max*quality, 255, CV_THRESH_BINARY);
 
 	for (int j = 0; j < src.bw.rows; j++)
 	{

@@ -13,8 +13,9 @@ public:
 	int row;
 	int column;
 	extractor detector;
-	bool tracked;
+	bool tracked = false;
 	double score = 0;
+	double displacement = 0;
 
 	Feature(int column, int row) : row(row), column(column) { }
 	Feature(int column, int row, extractor extr) : row(row), column(column), detector(extr) { }

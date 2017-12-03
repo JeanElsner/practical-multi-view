@@ -85,11 +85,6 @@ vector<Feature> grid_feature_extraction(Frame& I, const unsigned char size[2], c
 	return feats;
 }
 
-void FAST_corner_detector(Mat& I)
-{
-	// TODO
-}
-
 // TODO: doc
 void gaussian_window_3x3(const Mat& src, Mat& dst)
 {
@@ -289,14 +284,14 @@ float compare_features(const Mat& src, int src_x, int src_y, const Mat& cmp, int
 
 // TODO: doc
 void knn_tracker(const Frame& f_src, Frame& f_cmp, vector<Feature> feats, 
-	vector<Feature>& new_feats, vector<bool>& tracked, int window = 31, float threshold = 2)
+	vector<Feature>& new_feats, vector<bool>& tracked, int window = 15, float threshold = 2)
 {
 	vector<BaseFeatureExtractor*> funcs;
 	//funcs.push_back(shi_tomasi_detector);
 	funcs.push_back(&OpenCVGoodFeatureExtractor());
 
-	vector<Feature> cmp_feats = grid_feature_extraction(f_cmp, GRID_SIZE, 35, funcs);
-
+	vector<Feature> cmp_feats = grid_feature_extraction(f_cmp, GRID_SIZE, 25, funcs);
+	double avg = 0;
 	for (auto & f : feats)
 	{
 		vector<Feature> nn = knn_features(f, cmp_feats);
@@ -314,10 +309,24 @@ void knn_tracker(const Frame& f_src, Frame& f_cmp, vector<Feature> feats,
 			}
 		}
 		if (err < threshold)
+		{
 			tracked.push_back(true);
+			best_fit.tracked = true;
+			best_fit.displacement = f.distance(best_fit);
+			avg += best_fit.displacement;
+		}
 		else
 			tracked.push_back(false);
 		new_feats.push_back(best_fit);
+	}
+	avg /= (double)new_feats.size();
+	for (auto& f : new_feats)
+	{
+		if (f.displacement > 3*avg)
+		{
+			f.tracked = false;
+			cout << avg << " > " << f.displacement << endl;
+		}
 	}
 }
 
@@ -348,8 +357,8 @@ int main(int argc, char** argv)
 		I.push_back(frame);
 		
 		vector<BaseFeatureExtractor*> funcs;
-		//funcs.push_back(&OpenCVGoodFeatureExtractor());
-		funcs.push_back(&ShiTomasiFeatureExtractor());
+		funcs.push_back(&OpenCVGoodFeatureExtractor());
+		//funcs.push_back(&ShiTomasiFeatureExtractor());
 
 		/*
 		Mat H(im.size(), CV_32FC3);
@@ -364,7 +373,6 @@ int main(int argc, char** argv)
 		imshow("test", imc);
 		waitKey(20);*/
 		
-
 		// TODO: put these three section into trackers
 		
 		if (k == 0)
@@ -379,38 +387,35 @@ int main(int argc, char** argv)
 		//////////////////////////////
 		// My knn tracker
 		//////////////////////////////
-		/*
+		
 		if (k > 0)
 		{
-			vector<feature> new_feats;
+			vector<Feature> new_feats;
 			vector<bool> tracked;
 
 			knn_tracker(I[k - 1], I[k], feats, new_feats, tracked);
 
 			for (int i = 0; i < new_feats.size(); i++)
 			{
-				if (!tracked[i])
+				if (!new_feats[i].tracked)
 					continue;
 
-				circle(imc, new_feats[i].point(), 5, Scalar(0, 255, 255));
-				line(imc, feats[i].point(), new_feats[i].point(), Scalar(0, 255, 255));
+				circle(frame.orig, new_feats[i].point(), 5, Scalar(0, 255, 255));
+				line(frame.orig, feats[i].point(), new_feats[i].point(), Scalar(0, 255, 255));
 			}
-			Mat H(im.size(), CV_32FC3);
-			compute_harris_matrix(im, H);
-			G.push_back(H);
-			feats = grid_feature_extraction(im, H, GRID_SIZE, 35, funcs);
+			feats = grid_feature_extraction(frame, GRID_SIZE, 35, funcs);
 
-			imshow("test", imc);
+			imshow("test", frame.orig);
 			waitKey(20);
-			video.write(imc);
-		}*/
+			video.write(frame.orig);
+		}
 		
 
 		////////////////////////////////
 		// Opencv lukas-kanade tracker
 		////////////////////////////////
 		
-		vector<Point2f> points, next_points;
+		/*vector<Point2f> points, next_points;
 
 		for (auto const& f : feats)
 		{
@@ -441,7 +446,7 @@ int main(int argc, char** argv)
 		}
 		imshow("test", frame.orig);
 		video.write(frame.orig);
-		waitKey(20);
+		waitKey(20);*/
 		
 		
 		//////////////////////////////////
