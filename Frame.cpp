@@ -8,7 +8,8 @@ Frame::Frame(cv::Mat & orig) : orig(orig)
 Frame::Frame(const std::string& file_name)
 {
 	orig = cv::imread(file_name, cv::IMREAD_COLOR);
-	init();
+	if (!orig.empty())
+		init();
 }
 
 void Frame::init()
@@ -67,7 +68,7 @@ cv::Mat& Frame::getHarrisMatrix()
 		computeHarrisMatrix();
 	return harris;
 }
-#include <opencv2\highgui.hpp>
+
 Frame Frame::regionOfInterest(cv::Rect & rect)
 {
 	Frame f_new;
@@ -110,4 +111,5 @@ void Frame::computeHarrisMatrix()
 	cv::merge(channels, harris);
 
 	cv::blur(harris, harris, cv::Size(3, 3));
+	computed_harris = true;
 }

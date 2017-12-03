@@ -9,6 +9,7 @@
 #include "Frame.h"
 #include "BaseFeatureExtractor.h"
 #include "OpenCVGoodFeatureExtractor.h"
+#include "ShiTomasiFeatureExtractor.h"
 
 using namespace cv;
 using namespace std;
@@ -345,12 +346,12 @@ float compare_features(const Mat& src, int src_x, int src_y, const Mat& cmp, int
 }
 
 // TODO: doc
-/*void knn_tracker(const Frame& f_src, Frame& f_cmp, vector<Feature> feats, 
+void knn_tracker(const Frame& f_src, Frame& f_cmp, vector<Feature> feats, 
 	vector<Feature>& new_feats, vector<bool>& tracked, int window = 31, float threshold = 2)
 {
-	vector<BaseFeatureExtractor> funcs;
+	vector<BaseFeatureExtractor*> funcs;
 	//funcs.push_back(shi_tomasi_detector);
-	funcs.push_back(OpenCVGoodFeatureExtractor());
+	funcs.push_back(&OpenCVGoodFeatureExtractor());
 
 	vector<Feature> cmp_feats = grid_feature_extraction(f_cmp, GRID_SIZE, 35, funcs);
 
@@ -376,7 +377,7 @@ float compare_features(const Mat& src, int src_x, int src_y, const Mat& cmp, int
 			tracked.push_back(false);
 		new_feats.push_back(best_fit);
 	}
-}*/
+}
 
 int main(int argc, char** argv)
 {
@@ -405,8 +406,8 @@ int main(int argc, char** argv)
 		I.push_back(frame);
 		
 		vector<BaseFeatureExtractor*> funcs;
-		funcs.push_back(&OpenCVGoodFeatureExtractor());
-		//funcs.push_back(opencv_good_features);
+		//funcs.push_back(&OpenCVGoodFeatureExtractor());
+		funcs.push_back(&ShiTomasiFeatureExtractor());
 
 		/*
 		Mat H(im.size(), CV_32FC3);

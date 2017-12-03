@@ -12,6 +12,10 @@ public:
 
 	OpenCVGoodFeatureExtractor() { }
 
-	virtual std::vector<Feature> extractFeatures(const Frame& src, int max);
+	OpenCVGoodFeatureExtractor(double quality, double min_distance): 
+		quality(quality), 
+		min_distance(min_distance) { }
+
+	virtual std::vector<Feature> extractFeatures(Frame& src, int max);
 };
 #endif

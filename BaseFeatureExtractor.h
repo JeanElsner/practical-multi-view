@@ -16,6 +16,6 @@ public:
 
 		@return Vector of all the found features
 	*/
-	virtual std::vector<Feature> extractFeatures(const Frame& src, int max) = 0;
+	virtual std::vector<Feature> extractFeatures(Frame& src, int max) = 0;
 };
 #endif
