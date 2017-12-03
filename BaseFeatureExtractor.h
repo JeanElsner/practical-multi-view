@@ -5,9 +5,11 @@
 #include "Feature.h"
 #include "Frame.h"
 
+// Abstract base class, used to extract features from images
 class BaseFeatureExtractor
 {
 public:
+
 	/**
 		Extracts features from the given image (-section)
 

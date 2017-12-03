@@ -125,7 +125,7 @@ uchar bilinear_subpixel(const Mat& src, float sub_x, float sub_y)
 }
 
 // TODO: doc
-void track_features(Frame& f_src, const Frame& f_next, const vector<Feature>& feats, vector<Feature>& new_feats, int window = 15, int iter = 5)
+void track_features(Frame& f_src, const Frame& f_next, const vector<Feature>& feats, vector<Feature>& new_feats, int window = 5, int iter = 5)
 {
 	vector<Mat> grad;
 	grad.push_back(f_src.getSpatialGradientX());
@@ -219,7 +219,6 @@ void track_features(Frame& f_src, const Frame& f_next, const vector<Feature>& fe
 		corr.column = (int)round((double)f.column + v[0]);
 		corr.row = (int)round((double)f.row + v[1]);
 		new_feats.push_back(corr);
-
 	}
 }
 
@@ -388,7 +387,7 @@ int main(int argc, char** argv)
 		// My knn tracker
 		//////////////////////////////
 		
-		if (k > 0)
+		/*if (k > 0)
 		{
 			vector<Feature> new_feats;
 			vector<bool> tracked;
@@ -408,14 +407,14 @@ int main(int argc, char** argv)
 			imshow("test", frame.orig);
 			waitKey(20);
 			video.write(frame.orig);
-		}
+		}*/
 		
 
 		////////////////////////////////
 		// Opencv lukas-kanade tracker
 		////////////////////////////////
 		
-		/*vector<Point2f> points, next_points;
+		vector<Point2f> points, next_points;
 
 		for (auto const& f : feats)
 		{
@@ -446,34 +445,33 @@ int main(int argc, char** argv)
 		}
 		imshow("test", frame.orig);
 		video.write(frame.orig);
-		waitKey(20);*/
+		waitKey(20);
 		
 		
 		//////////////////////////////////
 		// my klt tracker
 		//////////////////////////////////
-		/*Mat H(im.size(), CV_32FC3);
-		compute_harris_matrix(im, H);
-		G.push_back(H);
+		/*
+		G.push_back(frame.getHarrisMatrix());
 		if (k > 0)
 		{
-			vector<feature> new_feats, old_feats;
+			vector<Feature> new_feats, old_feats;
 			old_feats = feats;
 
-			for (int j = 2; j >= 0; j--)
+			for (int j = 1; j >= 0; j--)
 			{
-				Mat src, next, H;
-				next = Mat::zeros(I[k].size() / 2, I[k].type());
+				Mat src, next;//, H;
+				next = Mat::zeros(I[k].bw.size() / 2, I[k].bw.type());
 
-				resize(I[k], next, I[k].size() / (int)pow(2, j));
-				resize(I[k-1], src, I[k-1].size() / (int)pow(2, j));
-				resize(G[k-1], H, G[k-1].size() / (int)pow(2, j));
+				resize(I[k].orig, next, I[k].orig.size() / (int)pow(2, j));
+				resize(I[k-1].orig, src, I[k-1].orig.size() / (int)pow(2, j));
+				//resize(G[k-1], H, G[k-1].size() / (int)pow(2, j));
 				
-				scale_feats(feats, 1.f / pow(2, j));
-				track_features(src, next, feats, new_feats, 31);
+				Feature::scale(feats, 1.f / pow(2, j));
+				track_features(Frame(src), Frame(next), feats, new_feats, 31);
 				
-				scale_feats(feats, pow(2, j));
-				scale_feats(new_feats, pow(2, j));
+				Feature::scale(feats, pow(2, j));
+				Feature::scale(new_feats, pow(2, j));
 
 				if (j > 0)
 				{
@@ -481,13 +479,13 @@ int main(int argc, char** argv)
 					new_feats.clear();
 				}
 			}
-
+			Mat show = frame.orig.clone();
 			for (int i = 0; i < new_feats.size(); i++)
 			{
 				if (!new_feats[i].tracked)
 					continue;
-				circle(imc, Point(new_feats[i].column, new_feats[i].row), 5, Scalar(0, 255, 255));
-				arrowedLine(imc, new_feats[i].point(), old_feats[i].point(), Scalar(0, 255, 255));
+				circle(show, Point(new_feats[i].column, new_feats[i].row), 5, Scalar(0, 255, 255));
+				arrowedLine(show, new_feats[i].point(), old_feats[i].point(), Scalar(0, 255, 255));
 			}
 			feats.clear();
 
@@ -495,10 +493,10 @@ int main(int argc, char** argv)
 			{
 				feats.push_back(f);
 			}
-			imshow("test", imc);
+			imshow("test", show);
 			waitKey(20);
-		}*/
-
+		}
+		*/
 		/*for (auto const& f : feats)
 		{
 			switch (f.detector)
