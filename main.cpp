@@ -113,64 +113,6 @@ void gaussian_window_3x3(const Mat& src, Mat& dst)
 }
 
 // TODO: doc
-void compute_shi_tomasi_response(const Mat& H, Mat& dst, float quality = .3)
-{
-	for (int r = 0; r < H.rows; r++)
-	{
-		const double* p_H = H.ptr<double>(r);
-		double* p_dst = dst.ptr<double>(r);
-
-		for (int c = 0; c < (H.cols-1)*3; c +=3)
-		{
-			double Ixx = p_H[c + 0];
-			double Iyy = p_H[c + 1];
-			double Ixy = p_H[c + 2];
-
-			double B = -Ixx - Iyy;
-			double C = Ixx*Iyy - pow(Ixy, 2);
-
-			double lambda_1 = (-B + sqrt(pow(B, 2) - 4 * C)) / 2;
-			double lambda_2 = (-B - sqrt(pow(B, 2) - 4 * C)) / 2;
-
-			//p_dst[c / 3] = lambda_1*lambda_2 - 0.04f*pow(lambda_1 +lambda_2, 2);
-			p_dst[c / 3] = min(lambda_1, lambda_2);
-		}
-	}
-}
-
-// TODO: doc
-vector<Feature> shi_tomasi_detector(const Mat& src, const Mat& H, int row_offset=0, int col_offset=0)
-{
-	Mat R(src.size(), CV_64FC1);
-	compute_shi_tomasi_response(H, R);
-	vector<Feature> feats;
-
-	Mat thresh(src.size(), CV_64FC1);
-	double r_min, r_max;
-	minMaxLoc(R, &r_min, &r_max);
-	threshold(R, thresh, r_max*0.4, 255, CV_THRESH_BINARY);
-
-	for (int j = 0; j < src.rows; j++)
-	{
-		double* p_thresh = thresh.ptr<double>(j);
-		double* p_R = R.ptr<double>(j);
-
-		for (int i = 0; i < src.cols; i++)
-		{
-			if (p_thresh[i] == 255)
-			{
-				Feature f;
-				f.row = j + row_offset;
-				f.column = i + col_offset;
-				f.detector = Feature::extractor::shi_tomasi;
-				feats.push_back(f);
-			}
-		}
-	}
-	return feats;
-}
-
-// TODO: doc
 uchar bilinear_subpixel(const Mat& src, float sub_x, float sub_y)
 {
 	int x = (int)sub_x;

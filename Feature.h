@@ -14,6 +14,7 @@ public:
 	int column;
 	extractor detector;
 	bool tracked;
+	double score = 0;
 
 	Feature(int column, int row) : row(row), column(column) { }
 	Feature(int column, int row, extractor extr) : row(row), column(column), detector(extr) { }
@@ -46,6 +47,7 @@ public:
 
 	friend bool operator== (const Feature& lhs, const Feature& rhs);
 	friend bool operator!= (const Feature& lhs, const Feature& rhs);
+	friend bool operator>(const Feature& lhs, const Feature& rhs);
 
 	/**
 		Scale this feature's coordinates by a factor

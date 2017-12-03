@@ -1,5 +1,6 @@
 #include "ShiTomasiFeatureExtractor.h"
-
+#include <functional>
+#include <iostream>
 std::vector<Feature> ShiTomasiFeatureExtractor::extractFeatures(Frame & src, int max)
 {
 	cv::Mat R = computeShiTomasiResponse(src);
@@ -23,10 +24,13 @@ std::vector<Feature> ShiTomasiFeatureExtractor::extractFeatures(Frame & src, int
 				f.row = j;
 				f.column = i;
 				f.detector = Feature::extractor::shi_tomasi;
+				f.score = p_R[i];
 				feats.push_back(f);
 			}
 		}
 	}
+	std::sort(feats.begin(), feats.end(), std::greater<Feature>());
+
 	return feats;
 }
 

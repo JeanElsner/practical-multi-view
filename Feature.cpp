@@ -50,3 +50,8 @@ bool operator!= (const Feature& lhs, const Feature& rhs)
 {
 	return !(lhs == rhs);
 }
+
+bool operator>(const Feature& lhs, const Feature& rhs)
+{
+	return (lhs.score > rhs.score);
+}
