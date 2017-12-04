@@ -4,6 +4,7 @@
 #include <opencv2/core.hpp>
 #include <vector>
 
+// Class describing an interesting feature (corner) in an image
 class Feature
 {
 public:

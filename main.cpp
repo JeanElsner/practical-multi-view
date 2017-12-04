@@ -346,7 +346,7 @@ int main(int argc, char** argv)
 	VideoWriter video;
 
 	BaseFeatureMatcher* matcher = &OpenCVLucasKanadeFM();
-	Tracker tracker();
+	Tracker tracker(&ShiTomasiFeatureExtractor(), &OpenCVLucasKanadeFM());
 
 	tick();
 	for (size_t k = 0; k < fn.size(); ++k)
@@ -358,8 +358,12 @@ int main(int argc, char** argv)
 		if (frame.isEmpty())
 			continue;
 
+		tracker.addFrame(frame);
+
+		if (true)
+			continue;
+
 		I.push_back(frame);
-		
 		vector<BaseFeatureExtractor*> funcs;
 		funcs.push_back(&OpenCVGoodFeatureExtractor());
 		//funcs.push_back(&ShiTomasiFeatureExtractor());

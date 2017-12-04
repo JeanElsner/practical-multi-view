@@ -19,7 +19,11 @@ private:
 	Frame() { }
 
 public:
+	// Original image and black and white version
 	cv::Mat orig, bw;
+
+	// Frame number in sequence
+	int frame;
 
 	/**
 		Constructs a frame object based on the given image

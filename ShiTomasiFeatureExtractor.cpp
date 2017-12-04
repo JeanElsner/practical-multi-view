@@ -32,7 +32,18 @@ std::vector<Feature> ShiTomasiFeatureExtractor::extractFeatures(Frame & src, int
 	}
 	std::sort(feats.begin(), feats.end(), std::greater<Feature>());
 
-	return feats;
+	std::vector<Feature> best_feats;
+	int i = 0;
+
+	for (auto& f : feats)
+	{
+		if (i >= max)
+			break;
+		best_feats.push_back(f);
+		i++;
+	}
+
+	return best_feats;
 }
 
 cv::Mat ShiTomasiFeatureExtractor::computeShiTomasiResponse(Frame& src)
