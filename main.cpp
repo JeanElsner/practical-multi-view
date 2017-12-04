@@ -346,7 +346,8 @@ int main(int argc, char** argv)
 	VideoWriter video;
 
 	BaseFeatureMatcher* matcher = &OpenCVLucasKanadeFM();
-	Tracker tracker(&ShiTomasiFeatureExtractor(), &OpenCVLucasKanadeFM());
+	//Tracker tracker(&ShiTomasiFeatureExtractor(), &OpenCVLucasKanadeFM());
+	Tracker tracker(&OpenCVGoodFeatureExtractor(), &OpenCVLucasKanadeFM());
 
 	tick();
 	for (size_t k = 0; k < fn.size(); ++k)

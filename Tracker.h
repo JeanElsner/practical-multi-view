@@ -14,6 +14,7 @@ private:
 public:
 	int tracked_features = 0;
 	int min_tracked_features = 50;
+	int tracked_features_tol = 5;
 	int init_frames = 5;
 	int init_features = 80;
 	int grid_size[2] = {255, 255};
@@ -25,6 +26,19 @@ public:
 
 	BaseFeatureExtractor* extractor;
 	BaseFeatureMatcher* matcher;
+
+	class GridSection
+	{
+	public:
+		// Coordinates within the grid
+		int x, y;
+
+		Frame frame;
+
+		std::vector<Feature> features;
+
+		GridSection(Frame frame, int x, int y): frame(frame), x(x), y(y) { }
+	};
 
 	/**
 		Standard constructor, assigning both a feature extractor
@@ -62,7 +76,7 @@ public:
 		@param fr The source frame to be divided
 		@return A vector containing the grid
 	*/
-	std::vector<Frame> getGridROI(Frame& fr);
+	std::vector<GridSection> getGridROI(Frame& fr);
 
 	/**
 		Compute the standard deviation of a list of values
@@ -71,52 +85,6 @@ public:
 		@return The standard deviation
 	*/
 	double standardDeviation(std::vector<double> val);
-
-	/**
-		Divides the image into a grid, so as to distribute
-		the extracted features across the entire image.
-
-		@param I Input image
-	*/
-	void gridFeatureExtraction(
-		Frame& I
-	)
-	{
-		int gr = std::ceil((double)I.bw.rows / (double)grid_size[0]);
-		int gc = std::ceil((double)I.bw.cols / (double)grid_size[1]);
-		int fn = 0;
-		std::vector<Feature> feats;
-
-		for (int r = 0; r < I.bw.rows; r += grid_size[0])
-		{
-			for (int c = 0; c < I.bw.cols; c += grid_size[1])
-			{
-				cv::Rect rec(
-					c, r, std::min((int)grid_size[1], I.bw.cols - c), 
-					std::min((int)grid_size[0], I.bw.rows - r)
-				);
-				Frame roi = I.regionOfInterest(rec);
-
-				int count = 0;
-				std::vector<Feature> new_feats = extractor->extractFeatures(roi, fn);
-
-				for (auto& f : new_feats)
-				{
-					f.column = c + f.column;
-					f.row = r + f.row;
-
-					if (count >= fn)
-						break;
-
-					if (!f.hasNeighbor(feats))
-					{
-						count++;
-						feats.push_back(f);
-					}
-				}
-			}
-		}
-	}
 
 private:
 	void countTrackedFeatures();
