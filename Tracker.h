@@ -13,19 +13,30 @@ private:
 
 public:
 	int tracked_features = 0;
-	int min_tracked_features = 50;
-	int tracked_features_tol = 5;
+	int min_tracked_features = 2000;
+	int tracked_features_tol = 10;
 	int init_frames = 5;
-	int init_features = 80;
+	int init_features = 3500;
 	int grid_size[2] = {255, 255};
 
 	bool verbose = true;
+
+	// camera calibration
+	//K_03: 9.037596e+02 0.000000e+00 6.957519e+02
+	//      0.000000e+00 9.019653e+02 2.242509e+02
+	//      0.000000e+00 0.000000e+00 1.000000e+00
+	cv::Mat camera = ((cv::Mat_<double>(3, 3)) <<
+		9.037596e+02,	0,				6.957519e+02,
+		0,				9.019653e+02,	2.242509e+02,
+		0,				0,				1);
 
 	std::vector<Feature> features;
 	std::vector<Frame> frames;
 
 	BaseFeatureExtractor* extractor;
 	BaseFeatureMatcher* matcher;
+
+	std::vector<cv::Mat> t, R;
 
 	class GridSection
 	{

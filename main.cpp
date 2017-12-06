@@ -12,6 +12,7 @@
 #include "ShiTomasiFeatureExtractor.h"
 #include "OpenCVLucasKanadeFM.h"
 #include "Tracker.h"
+#include "OpenCVFASTFeatureExtractor.h"
 
 using namespace cv;
 using namespace std;
@@ -347,19 +348,23 @@ int main(int argc, char** argv)
 
 	BaseFeatureMatcher* matcher = &OpenCVLucasKanadeFM();
 	//Tracker tracker(&ShiTomasiFeatureExtractor(), &OpenCVLucasKanadeFM());
-	Tracker tracker(&OpenCVGoodFeatureExtractor(), &OpenCVLucasKanadeFM());
+	//Tracker tracker(&OpenCVGoodFeatureExtractor(), &OpenCVLucasKanadeFM());
+	Tracker tracker(&OpenCVFASTFeatureExtractor(), &OpenCVLucasKanadeFM());
 
 	tick();
+
 	for (size_t k = 0; k < fn.size(); ++k)
 	{
-		//if (k > 2) break;
-
 		Frame frame(fn[k]);
 		
 		if (frame.isEmpty())
 			continue;
 
+		if (k == 1)
+			video = VideoWriter("../../my-feats/tracker.avi", CV_FOURCC('M', 'J', 'P', 'G'), 10, frame.bw.size());
+
 		tracker.addFrame(frame);
+		video.write(frame.orig);
 
 		if (true)
 			continue;
@@ -511,7 +516,7 @@ int main(int argc, char** argv)
 		cv::imwrite(ff, frame.orig);
 	}
 	video.release();
-	cout << tock();
+	cout << "Time: " << tock();
 	waitKey();
 	return 0;
 }

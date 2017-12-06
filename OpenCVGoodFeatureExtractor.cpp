@@ -7,6 +7,7 @@ std::vector<Feature> OpenCVGoodFeatureExtractor::extractFeatures(Frame& src, int
 	cv::goodFeaturesToTrack(src.bw, corners, max, quality, min_distance, cv::Mat(), 3, 3, false, 0.04);
 
 	std::vector<Feature> feats;
+
 	for (auto const& c : corners)
 	{
 		Feature f;

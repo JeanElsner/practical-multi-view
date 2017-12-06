@@ -20,6 +20,7 @@ public:
 
 	Feature(int column, int row) : row(row), column(column) { }
 	Feature(int column, int row, extractor extr) : row(row), column(column), detector(extr) { }
+	Feature(cv::Point p) : row(p.y), column(p.x) { }
 	Feature() { }
 
 	/**
@@ -45,7 +46,7 @@ public:
 		@param dist The distance in pixels
 		@return True if a neigihbor was found, false otherwise
 	*/
-	bool hasNeighbor(const std::vector<Feature> feats, int dist = 3);
+	bool hasNeighbor(const std::vector<Feature> feats, int dist = 5);
 
 	friend bool operator== (const Feature& lhs, const Feature& rhs);
 	friend bool operator!= (const Feature& lhs, const Feature& rhs);
