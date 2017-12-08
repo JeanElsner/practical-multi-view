@@ -19,30 +19,6 @@ using namespace std;
 
 unsigned char GRID_SIZE[2] = { 255, 255 };
 
-std::vector<double> ticktock;
-
-/**
-	Starts a timer, will be tiered if called multiple times
-*/
-void tick()
-{
-	ticktock.push_back(getTickCount());
-}
-
-/**
-	Returns the time since the last tick in seconds
-
-	@return Time since last call to tick
-*/
-double tock()
-{
-	if (ticktock.empty())
-		return 0;
-	double tock = ticktock.back();
-	ticktock.pop_back();
-	return (getTickCount() - tock) / getTickFrequency();
-}
-
 /**
 	Divides the image into a grid, so as to distribute
 	the calculated features across the entire image.
@@ -351,7 +327,7 @@ int main(int argc, char** argv)
 	//Tracker tracker(&OpenCVGoodFeatureExtractor(), &OpenCVLucasKanadeFM());
 	Tracker tracker(&OpenCVFASTFeatureExtractor(), &OpenCVLucasKanadeFM());
 
-	tick();
+	tracker.tick();
 
 	for (size_t k = 0; k < fn.size(); ++k)
 	{
@@ -387,16 +363,7 @@ int main(int argc, char** argv)
 		imshow("test", imc);
 		waitKey(20);*/
 		
-		// TODO: put these three section into trackers
-		
-		if (k == 0)
-		{
-			Mat H = frame.getHarrisMatrix();
-			G.push_back(H);
-			feats = grid_feature_extraction(frame, GRID_SIZE, 25, funcs);
-
-			video = VideoWriter("../../my-feats/tracker.avi", CV_FOURCC('M', 'J', 'P', 'G'), 10, frame.bw.size());
-		}
+		// TODO: put these two section into trackers
 		
 		//////////////////////////////
 		// My knn tracker
@@ -423,31 +390,6 @@ int main(int argc, char** argv)
 			waitKey(20);
 			video.write(frame.orig);
 		}*/
-		
-
-		////////////////////////////////
-		// Opencv lukas-kanade tracker
-		////////////////////////////////
-		
-		if (k > 0)
-		{
-			std::vector<Feature> new_feats;
-			matcher->matchFeatures(I[k - 1], I[k], feats, new_feats);
-
-			for (int i = 0; i < new_feats.size(); i++)
-			{
-				if (new_feats[i].tracked)
-				{
-					circle(frame.orig, new_feats[i].point(), 5, Scalar(0, 255, 255));
-					line(frame.orig, feats[i].point(), new_feats[i].point(), Scalar(0, 255, 255));
-				}
-			}
-			feats = new_feats;
-		}
-		imshow("test", frame.orig);
-		video.write(frame.orig);
-		waitKey(20);
-		
 		
 		//////////////////////////////////
 		// my klt tracker
@@ -516,7 +458,7 @@ int main(int argc, char** argv)
 		cv::imwrite(ff, frame.orig);
 	}
 	video.release();
-	cout << "Time: " << tock();
+	cout << "Time: " << tracker.tock();
 	waitKey();
 	return 0;
 }

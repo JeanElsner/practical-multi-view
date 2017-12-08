@@ -14,7 +14,7 @@ private:
 public:
 	int tracked_features = 0;
 	int min_tracked_features = 2000;
-	int tracked_features_tol = 10;
+	int tracked_features_tol = 500;
 	int init_frames = 5;
 	int init_features = 3500;
 	int grid_size[2] = {255, 255};
@@ -30,6 +30,8 @@ public:
 		0,				9.019653e+02,	2.242509e+02,
 		0,				0,				1);
 
+	cv::Mat map = cv::Mat::zeros(512, 512, CV_8UC3);
+
 	std::vector<Feature> features;
 	std::vector<Frame> frames;
 
@@ -37,6 +39,20 @@ public:
 	BaseFeatureMatcher* matcher;
 
 	std::vector<cv::Mat> t, R;
+
+	std::vector<double> ticktock;
+
+	/**
+	Starts a timer, will be tiered if called multiple times
+	*/
+	void tick() { ticktock.push_back(cv::getTickCount()); }
+
+	/**
+	Returns the time since the last tick in seconds
+
+	@return Time since last call to tick
+	*/
+	double tock();
 
 	class GridSection
 	{
@@ -77,8 +93,6 @@ public:
 		for the tracker.
 	*/
 	void initialise();
-
-	double computeFeatureCost(Frame& frame);
 
 	/**
 		Divides the frame into a grid of regions of interest

@@ -18,7 +18,7 @@ void OpenCVLucasKanadeFM::matchFeatures(
 
 	std::vector<uchar> status;
 	std::vector<float> err;
-	cv::calcOpticalFlowPyrLK(src.bw, next.bw, points, next_points, status, err, cv::Size(31, 31), 8);
+	cv::calcOpticalFlowPyrLK(src.bw, next.bw, points, next_points, status, err, cv::Size(15, 15), 3);
 
 	for (int i = 0; i < feats.size(); i++)
 	{
