@@ -9,14 +9,19 @@
 
 void Tracker::start()
 {
+	int i = 0;
+
 	for (auto& fn : file_names)
 	{
+		if (i >= stop)
+			break;
 		Frame frame(fn);
 
 		if (frame.isEmpty())
 			continue;
 
 		addFrame(frame);
+		i++;
 	}
 }
 
@@ -126,28 +131,28 @@ void Tracker::parsePoses(std::string filename)
 			case 2:
 				_R.at<double>(0, 2) = j;
 				break;
-			case 3:
+			case 4:
 				_R.at<double>(1, 0) = j;
 				break;
-			case 4:
+			case 5:
 				_R.at<double>(1, 1) = j;
 				break;
-			case 5:
+			case 6:
 				_R.at<double>(1, 2) = j;
 				break;
-			case 6:
+			case 8:
 				_R.at<double>(2, 0) = j;
 				break;
-			case 7:
+			case 9:
 				_R.at<double>(2, 1) = j;
 				break;
-			case 8:
+			case 10:
 				_R.at<double>(2, 2) = j;
 				break;
-			case 9:
+			case 3:
 				_t.at<double>(0, 0) = j;
 				break;
-			case 10:
+			case 7:
 				_t.at<double>(1, 0) = j;
 				break;
 			case 11:
@@ -264,7 +269,7 @@ void Tracker::addFrame(Frame& frame)
 
 		tick();
 		cv::Mat _R, _t, mask;
-		cv::Mat E = cv::findEssentialMat(p1, p2, camera, cv::RANSAC, 0.80, 3, mask);
+		cv::Mat E = cv::findEssentialMat(p1, p2, camera, cv::RANSAC, 0.99, 1, mask);
 		std::cout << tock() << " seconds for finding E ";
 		tick();
 		cv::recoverPose(E, p1, p2, camera, _R, _t, mask);
@@ -287,13 +292,26 @@ void Tracker::addFrame(Frame& frame)
 
 				for (int j = 1; j <= i; j++)
 				{
-					__t += (__R*t[j]);
+					cv::Mat dist = gt_t[j] - gt_t[j - 1];
+					double scale = std::sqrt(
+						std::pow(dist.at<double>(0), 2) +
+						std::pow(dist.at<double>(1), 2) +
+						std::pow(dist.at<double>(2), 2));
+
+					__t += scale*(__R*t[j]);
 					__R = R[j] * __R;
 					cv::circle(
-						map, 
-						cv::Point(map.cols/2 + (int)__t.at<double>(0), map.rows - 8 + (int)__t.at<double>(2)), 
-						.5, 
-						cv::Scalar(0, 255, 0), 
+						map,
+						cv::Point(map.cols / 2 + (int)__t.at<double>(0), map.rows - 8 + (int)__t.at<double>(2)),
+						.5,
+						cv::Scalar(0, 255, 0),
+						2);
+
+					cv::circle(
+						map,
+						cv::Point(map.cols / 2 + (int)gt_t[j].at<double>(0), map.rows - 8 - (int)gt_t[j].at<double>(2)),
+						.5,
+						cv::Scalar(0, 0, 255),
 						2);
 				}
 			}
@@ -320,7 +338,7 @@ void Tracker::addFrame(Frame& frame)
 		
 		cv::imshow("map", map);
 		cv::imshow("test", frame.orig);
-		cv::waitKey(20);
+		cv::waitKey(10);
 	}
 	countTrackedFeatures();
 

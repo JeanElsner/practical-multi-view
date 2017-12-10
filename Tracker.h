@@ -14,13 +14,14 @@ private:
 
 public:
 	int tracked_features = 0;
-	int min_tracked_features = 3000;
-	int tracked_features_tol = 2000;
+	int min_tracked_features = 4000;
+	int tracked_features_tol = 1000;
 	int init_frames = 5;
 	int grid_size[2] = {255, 255};
+	int stop = 350;
 
 	bool verbose = true;
-	bool fancy_video = false;
+	bool fancy_video = true;
 
 	std::vector<cv::String> file_names;
 	std::vector<int> timestamps;

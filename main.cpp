@@ -324,6 +324,16 @@ int main(int argc, char** argv)
 		return -1;
 	}
 	tracker.start();
+
+	VideoWriter video;
+	video = VideoWriter("../../my-feats/tracker.avi", CV_FOURCC('M', 'J', 'P', 'G'), 10, tracker.frames[0].orig.size());
+
+	for (auto& f : tracker.frames)
+	{
+		video.write(f.orig);
+	}
+	video.release();
+
 	return 0;
 	
 	cv::String path(argv[1]);
@@ -334,8 +344,6 @@ int main(int argc, char** argv)
 	vector<Mat> G;
 	vector<Feature> feats;
 
-	VideoWriter video;
-
 	//Tracker tracker(&ShiTomasiFeatureExtractor(), &OpenCVLucasKanadeFM());
 	//Tracker tracker(&OpenCVGoodFeatureExtractor(), &OpenCVLucasKanadeFM());
 	//Tracker tracker(&OpenCVFASTFeatureExtractor(), &OpenCVLucasKanadeFM());
@@ -344,7 +352,7 @@ int main(int argc, char** argv)
 
 	for (size_t k = 0; k < fn.size(); ++k)
 	{
-		Frame frame(fn[k]);
+		/*Frame frame(fn[k]);
 		
 		if (frame.isEmpty())
 			continue;
@@ -360,7 +368,7 @@ int main(int argc, char** argv)
 
 		I.push_back(frame);
 		vector<BaseFeatureExtractor*> funcs;
-		funcs.push_back(&OpenCVGoodFeatureExtractor());
+		funcs.push_back(&OpenCVGoodFeatureExtractor());*/
 		//funcs.push_back(&ShiTomasiFeatureExtractor());
 
 		/*
@@ -465,10 +473,10 @@ int main(int argc, char** argv)
 				break;
 			}
 		}*/
-		stringstream f;
+		/*stringstream f;
 		f << "../../my-feats/" << k << ".png";
 		string ff; f >> ff;
-		cv::imwrite(ff, frame.orig);
+		cv::imwrite(ff, frame.orig);*/
 	}
 	video.release();
 	cout << "Time: " << tracker.tock();
