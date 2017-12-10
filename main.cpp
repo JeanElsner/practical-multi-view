@@ -5,6 +5,7 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/features2d.hpp>
 #include <iostream>
+#include <fstream>
 #include "Feature.h"
 #include "Frame.h"
 #include "BaseFeatureExtractor.h"
@@ -303,7 +304,7 @@ void knn_tracker(const Frame& f_src, Frame& f_cmp, vector<Feature> feats,
 		if (f.displacement > 3*avg)
 		{
 			f.tracked = false;
-			cout << avg << " > " << f.displacement << endl;
+			std::cout << avg << " > " << f.displacement << endl;
 		}
 	}
 }
@@ -312,6 +313,19 @@ int main(int argc, char** argv)
 {
 	if (argc < 2)
 		return -1;
+	Tracker tracker;
+	try
+	{
+		tracker = Tracker(argv[1]);
+	}
+	catch (Tracker::TrackerException &e)
+	{
+		std::cerr << e.what() << std::endl << "Tracker configuration failed";
+		return -1;
+	}
+	tracker.start();
+	return 0;
+	
 	cv::String path(argv[1]);
 	vector<cv::String> fn;
 	cv::glob(path, fn, true);
@@ -322,10 +336,9 @@ int main(int argc, char** argv)
 
 	VideoWriter video;
 
-	BaseFeatureMatcher* matcher = &OpenCVLucasKanadeFM();
 	//Tracker tracker(&ShiTomasiFeatureExtractor(), &OpenCVLucasKanadeFM());
 	//Tracker tracker(&OpenCVGoodFeatureExtractor(), &OpenCVLucasKanadeFM());
-	Tracker tracker(&OpenCVFASTFeatureExtractor(), &OpenCVLucasKanadeFM());
+	//Tracker tracker(&OpenCVFASTFeatureExtractor(), &OpenCVLucasKanadeFM());
 
 	tracker.tick();
 

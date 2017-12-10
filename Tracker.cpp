@@ -1,7 +1,230 @@
 #include "Tracker.h"
+#include "OpenCVFASTFeatureExtractor.h"
+#include "OpenCVLucasKanadeFM.h"
 #include <iostream>
+#include <fstream>
+#include <sstream>
 #include <opencv2/highgui.hpp>
 #include <opencv2/calib3d.hpp>
+
+void Tracker::start()
+{
+	for (auto& fn : file_names)
+	{
+		Frame frame(fn);
+
+		if (frame.isEmpty())
+			continue;
+
+		addFrame(frame);
+	}
+}
+
+Tracker::Tracker(std::string cfg)
+{
+	extractor = new OpenCVFASTFeatureExtractor();
+	matcher = new OpenCVLucasKanadeFM();
+
+	std::ifstream cfg_file;
+	cfg_file.open(cfg);
+
+	if (!cfg_file) {
+		throw TrackerException("Unable to open configuration file");
+	}
+	std::string cfg_line;
+	int cfg_case = 0;
+
+	std::string img_path, timestamp_path;
+	int num_calib = 0;
+	std::stringstream s_calib;
+
+	while (std::getline(cfg_file, cfg_line)) {
+
+		switch (cfg_case)
+		{
+		// Image file path
+		case 0:
+			cv::glob(cfg_line, file_names, false);
+			break;
+		// Camera identifier
+		case 1:
+			s_calib = std::stringstream(cfg_line);
+			s_calib >> num_calib;
+			break;
+		// KITTI calibration file path
+		case 2:
+			parseCalibration(cfg_line, num_calib);
+			break;
+		case 3:
+		// KITTI ground truth
+			parsePoses(cfg_line);
+			break;
+		}
+
+		cfg_case++;
+	}
+	cfg_file.close();
+}
+
+std::vector<std::string> Tracker::split(const std::string& str, const std::string& delim)
+{
+	std::vector<std::string> tokens;
+	std::size_t prev = 0, pos = 0;
+	do
+	{
+		pos = str.find(delim, prev);
+
+		if (pos == std::string::npos)
+		{
+			pos = str.length();
+		}
+		std::string token = str.substr(prev, pos - prev);
+
+		if (!token.empty())
+		{
+			tokens.push_back(token);
+		}
+		prev = pos + delim.length();
+	}
+	while (pos < str.length() && prev < str.length());
+
+	return tokens;
+}
+
+void Tracker::parsePoses(std::string filename)
+{
+	std::fstream f_poses;
+	f_poses.open(filename);
+
+	if (!f_poses)
+	{
+		throw TrackerException("Unable to open pose file");
+	}
+	std::string pose;
+
+	while (std::getline(f_poses, pose))
+	{
+		std::vector<std::string> s_pose = split(pose);
+		int i = 0;
+		cv::Mat_<double> _R(3, 3);
+		cv::Mat_<double> _t(3, 1);
+
+		for (auto const& p : s_pose)
+		{
+			std::stringstream ss_pose(p);
+			double j;
+			ss_pose >> j;
+
+			switch (i)
+			{
+			case 0:
+				_R.at<double>(0, 0) = j;
+				break;
+			case 1:
+				_R.at<double>(0, 1) = j;
+				break;
+			case 2:
+				_R.at<double>(0, 2) = j;
+				break;
+			case 3:
+				_R.at<double>(1, 0) = j;
+				break;
+			case 4:
+				_R.at<double>(1, 1) = j;
+				break;
+			case 5:
+				_R.at<double>(1, 2) = j;
+				break;
+			case 6:
+				_R.at<double>(2, 0) = j;
+				break;
+			case 7:
+				_R.at<double>(2, 1) = j;
+				break;
+			case 8:
+				_R.at<double>(2, 2) = j;
+				break;
+			case 9:
+				_t.at<double>(0, 0) = j;
+				break;
+			case 10:
+				_t.at<double>(1, 0) = j;
+				break;
+			case 11:
+				_t.at<double>(2, 0) = j;
+				break;
+			}
+			i++;
+		}
+		gt_R.push_back(_R);
+		gt_t.push_back(_t);
+	}
+}
+
+void Tracker::parseCalibration(std::string filename, int num_calib)
+{
+	std::fstream f_calib;
+	f_calib.open(filename);
+
+	if (!f_calib)
+	{
+		throw TrackerException("Unable to open calibration file");
+	}
+	std::string calib;
+	int i = 0;
+
+	while (std::getline(f_calib, calib))
+	{
+		if (i == num_calib)
+		{
+			int k = 0;
+			int pos = 0;
+			std::string token;
+
+			while ((pos = calib.find(" ")) != std::string::npos)
+			{
+				std::stringstream todouble(calib.substr(0, pos));
+				double j;
+				todouble >> j;
+				calib.erase(0, pos + 1);
+
+				switch (k)
+				{
+				case 1:
+					camera.at<double>(0, 0) = j;
+					break;
+				case 2:
+					camera.at<double>(0, 1) = j;
+					break;
+				case 3:
+					camera.at<double>(0, 2) = j;
+					break;
+				case 5:
+					camera.at<double>(1, 0) = j;
+					break;
+				case 6:
+					camera.at<double>(1, 1) = j;
+					break;
+				case 7:
+					camera.at<double>(1, 2) = j;
+					break;
+				case 9:
+					camera.at<double>(2, 0) = j;
+					break;
+				case 10:
+					camera.at<double>(2, 1) = j;
+					break;
+				case 11:
+					camera.at<double>(2, 2) = j;
+					break;
+				}
+				k++;
+			}
+		}
+		i++;
+	}
+	f_calib.close();
+}
 
 double Tracker::tock()
 {
@@ -53,7 +276,7 @@ void Tracker::addFrame(Frame& frame)
 			R.push_back(_R);
 			t.push_back(_t);
 		//}
-		
+
 		if (t.size())
 		{
 			for (int i = 1; i < t.size(); i++)
@@ -68,28 +291,31 @@ void Tracker::addFrame(Frame& frame)
 					__R = R[j] * __R;
 					cv::circle(
 						map, 
-						cv::Point(map.cols/2 + (int)__t.at<double>(0), map.rows/2 - 8 + (int)__t.at<double>(2)), 
+						cv::Point(map.cols/2 + (int)__t.at<double>(0), map.rows - 8 + (int)__t.at<double>(2)), 
 						.5, 
 						cv::Scalar(0, 255, 0), 
 						2);
 				}
 			}
 		}
-		// TODO put map ontop of original image for fancy video
-		cv::Mat roi = frame.orig(cv::Rect(0, frame.orig.rows - 256, 256, 256));
-		cv::Mat colour = cv::Mat::zeros(roi.size(), frame.orig.type());
-		cv::resize(map, colour, colour.size());
-		double alpha = 0.75;
-		cv::addWeighted(colour, alpha, roi, 1.0 - alpha, 0.0, roi);
-		
-		/*for (int i = 0; i < new_feats.size(); i++)
+
+		if (fancy_video)
 		{
+			cv::Mat roi = frame.orig(cv::Rect(0, frame.orig.rows - 256, 256, 256));
+			cv::Mat colour = cv::Mat::zeros(roi.size(), frame.orig.type());
+			cv::resize(map, colour, colour.size());
+			double alpha = 0.75;
+			cv::addWeighted(colour, alpha, roi, 1.0 - alpha, 0.0, roi);
+
+			/*for (int i = 0; i < new_feats.size(); i++)
+			{
 			if (new_feats[i].tracked)
 			{
-				circle(frame.orig, new_feats[i].point(), 5, cv::Scalar(0, 255, 255));
-				line(frame.orig, features[i].point(), new_feats[i].point(), cv::Scalar(0, 255, 255));
+			circle(frame.orig, new_feats[i].point(), 5, cv::Scalar(0, 255, 255));
+			line(frame.orig, features[i].point(), new_feats[i].point(), cv::Scalar(0, 255, 255));
 			}
-		}*/
+			}*/
+		}
 		features = new_feats;
 		
 		cv::imshow("map", map);
@@ -101,7 +327,7 @@ void Tracker::addFrame(Frame& frame)
 	if (init && tracked_features + tracked_features_tol < min_tracked_features)
 	{
 		int n = min_tracked_features - tracked_features;
-
+		tick();
 		if (verbose)
 			std::cout << "Trying to find " << n << " new features" << 
 			" in frame #" << (frames.size() - 1) << std::endl;
@@ -117,14 +343,18 @@ void Tracker::addFrame(Frame& frame)
 
 			for (auto& f : new_feats)
 			{
-				if (!f.hasNeighbor(features))
-				{
+				if (features.size() >= min_tracked_features + tracked_features_tol)
+					break;
+				//if (!f.hasNeighbor(features))
+				//{
 					f.column = r.x*grid_size[1] + f.column;
 					f.row = r.y*grid_size[0] + f.row;
 					features.push_back(f);
-				}
+				//}
 			}
 		}
+		if (verbose)
+			std::cout << "Feature extraction took " << tock() << " seconds";
 	}
 }
 
@@ -140,7 +370,7 @@ void Tracker::initialise()
 	for (auto& fr : frames)
 	{
 		std::vector<GridSection> roi = getGridROI(fr);
-		double n = init_features / roi.size();
+		double n = (min_tracked_features + tracked_features_tol) / roi.size();
 		double std_n = 0;
 		std::vector<double> n_i;
 		double std_s = 0;
@@ -221,6 +451,8 @@ void Tracker::countTrackedFeatures()
 
 	for (auto& f : features)
 	{
+		if (tracked_features >= min_tracked_features + tracked_features_tol)
+			break;
 		if (f.tracked)
 		{
 			new_feats.push_back(f);

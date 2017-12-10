@@ -5,6 +5,7 @@
 #include "BaseFeatureExtractor.h"
 #include "BaseFeatureMatcher.h"
 #include <vector>
+#include <exception>
 
 class Tracker
 {
@@ -13,22 +14,19 @@ private:
 
 public:
 	int tracked_features = 0;
-	int min_tracked_features = 2000;
-	int tracked_features_tol = 500;
+	int min_tracked_features = 3000;
+	int tracked_features_tol = 2000;
 	int init_frames = 5;
-	int init_features = 3500;
 	int grid_size[2] = {255, 255};
 
 	bool verbose = true;
+	bool fancy_video = false;
 
-	// camera calibration
-	//K_03: 9.037596e+02 0.000000e+00 6.957519e+02
-	//      0.000000e+00 9.019653e+02 2.242509e+02
-	//      0.000000e+00 0.000000e+00 1.000000e+00
-	cv::Mat camera = ((cv::Mat_<double>(3, 3)) <<
-		9.037596e+02,	0,				6.957519e+02,
-		0,				9.019653e+02,	2.242509e+02,
-		0,				0,				1);
+	std::vector<cv::String> file_names;
+	std::vector<int> timestamps;
+
+	// Camera matrix
+	cv::Mat camera = cv::Mat_<double>(3, 3);
 
 	cv::Mat map = cv::Mat::zeros(512, 512, CV_8UC3);
 
@@ -38,7 +36,9 @@ public:
 	BaseFeatureExtractor* extractor;
 	BaseFeatureMatcher* matcher;
 
-	std::vector<cv::Mat> t, R;
+	std::vector<cv::Mat> t, R, gt_t, gt_R;
+
+	cv::Mat curr_t, curr_R;
 
 	std::vector<double> ticktock;
 
@@ -67,17 +67,21 @@ public:
 		GridSection(Frame frame, int x, int y): frame(frame), x(x), y(y) { }
 	};
 
-	/**
-		Standard constructor, assigning both a feature extractor
-		as well as a matcher.
+	class TrackerException : public std::exception
+	{
+	public:
+		TrackerException(const char* msg): std::exception(msg) { }
+	};
 
-		@param extractor The feature extractor
-		@param matcher The feature matcher
+	/**
+		Constructor, configurating the object
+		based on a given configuration file.
+
+		@param cfg Path to the configuration file
 	*/
-	Tracker(BaseFeatureExtractor* extractor, BaseFeatureMatcher* matcher) :
-		extractor(extractor),
-		matcher(matcher)
-	{ }
+	Tracker(std::string cfg);
+
+	Tracker() {};
 
 	/**
 		Adds a frame to the tracker extracting new
@@ -110,6 +114,36 @@ public:
 		@return The standard deviation
 	*/
 	double standardDeviation(std::vector<double> val);
+
+
+	/**
+		Parses a KITTI calibration file for the camera matrix
+
+		@param filename Calibration file name
+		@param num_calib The number (identifier) of the camera matrix
+	*/
+	void parseCalibration(std::string filename, int num_calib);
+
+	/**
+		Parses a KITTI pose file containing the ground truth
+
+		@param filename Pose file name
+	*/
+	void parsePoses(std::string filename);
+
+	/**
+		Splits a string at the given delimeter
+
+		@param string The string to split
+		@param delim The delimeter to split by
+		@return A list of the tokens
+	*/
+	std::vector<std::string> split(const std::string& str, const std::string& delim = " ");
+
+	/**
+		Start the visual odometry process
+	*/
+	void start();
 
 private:
 	void countTrackedFeatures();
