@@ -5,6 +5,7 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #include <vector>
+#include "Feature3D.h"
 
 class Frame
 {
@@ -19,6 +20,8 @@ private:
 	Frame() { }
 
 public:
+	std::vector<Feature3D> feats3d;
+
 	// Original image and black and white version
 	cv::Mat orig, bw;
 

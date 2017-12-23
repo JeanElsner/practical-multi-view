@@ -55,3 +55,5 @@ bool operator>(const Feature& lhs, const Feature& rhs)
 {
 	return (lhs.score > rhs.score);
 }
+
+int Feature::id_gen = 1;

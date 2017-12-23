@@ -326,14 +326,14 @@ int main(int argc, char** argv)
 	tracker.start();
 
 	VideoWriter video;
-	video = VideoWriter("../../my-feats/tracker.avi", CV_FOURCC('M', 'J', 'P', 'G'), 10, tracker.frames[0].orig.size());
+	video = VideoWriter("../../../tracker.avi", CV_FOURCC('M', 'J', 'P', 'G'), 10, tracker.frames[0].orig.size());
 
 	for (auto& f : tracker.frames)
 	{
 		video.write(f.orig);
 	}
 	video.release();
-
+	
 	return 0;
 	
 	cv::String path(argv[1]);

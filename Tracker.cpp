@@ -6,6 +6,9 @@
 #include <sstream>
 #include <opencv2/highgui.hpp>
 #include <opencv2/calib3d.hpp>
+#include "Feature3D.h"
+#include "ProjectionResidual.h"
+#include <ceres/ceres.h>
 
 void Tracker::start()
 {
@@ -164,6 +167,18 @@ void Tracker::parsePoses(std::string filename)
 		gt_R.push_back(_R);
 		gt_t.push_back(_t);
 	}
+	cv::Mat init_R = gt_R[init_frames - 1].clone();
+	cv::transpose(gt_R[init_frames - 1], init_R);
+	cv::Mat init_t = gt_t[init_frames - 1];
+
+	std::vector<cv::Mat> tmp_R, tmp_t;
+	cv::Mat R, t;
+
+	for (int i = init_frames - 1; i < gt_t.size(); i++)
+	{
+		R = init_R*gt_R[i];
+		t = gt_t[i] - init_t;
+	}
 }
 
 void Tracker::parseCalibration(std::string filename, int num_calib)
@@ -240,12 +255,101 @@ double Tracker::tock()
 	return (cv::getTickCount() - tock) / cv::getTickFrequency();
 }
 
+void Tracker::drawMap()
+{
+	int j = t.size() - 1;
+	int k = frames.size() - 1;
+	map = cv::Mat::zeros(512, 512, CV_8UC3);
+
+	for (auto& f3d : feats3d)
+	{
+		Feature f = getFeature(f3d.feature);
+		cv::Scalar color;
+
+		if (f.column > frames[k].orig.cols / 2)
+			color = cv::Scalar(255, 0, 255);
+		else
+			color = cv::Scalar(255, 255, 0);
+
+		cv::circle(frames[k].orig, cv::Point(f.column, f.row), 3, color, .5);
+
+		cv::circle(map, cv::Point(map.cols / 2 + f3d.getPoint().x, map.rows / 2 + f3d.getPoint().z), 1, color, -1);
+	}
+	int x = map.cols / 2 + (int)t[j].at<double>(0);
+	int y = map.rows / 2 + (int)t[j].at<double>(2);
+	cv::RotatedRect rRect = cv::RotatedRect(cv::Point2f(x, y), cv::Size2f(10, 15), std::acos(R[j].at<double>(0, 0)) / 3.1416 * 180);
+	cv::Point2f vertices[4];
+	rRect.points(vertices);
+
+	for (int i = 0; i < 4; i++)
+		cv::line(map, vertices[i], vertices[(i + 1) % 4], cv::Scalar(0, 255, 0));
+
+	x = map.cols / 2 + (int)gt_t[j].at<double>(0);
+	y = map.rows / 2 - (int)gt_t[j].at<double>(2);
+	rRect = cv::RotatedRect(cv::Point2f(x, y), cv::Size2f(10, 15), std::acos(gt_R[j].at<double>(0, 0)) / 3.1416 * 180);
+	rRect.points(vertices);
+
+	for (int i = 0; i < 4; i++)
+		cv::line(map, vertices[i], vertices[(i + 1) % 4], cv::Scalar(0, 0, 255));
+
+	for (int i = 0; i <= j; i++)
+	{
+		int x = map.cols / 2 + (int)t[i].at<double>(0);
+		int y = map.rows / 2 + (int)t[i].at<double>(2);
+		cv::circle(
+			map,
+			cv::Point(x, y),
+			.5,
+			cv::Scalar(0, 255, 0),
+			2);
+
+		cv::circle(
+			map,
+			cv::Point(map.cols / 2 + (int)gt_t[i].at<double>(0), map.rows / 2 - (int)gt_t[i].at<double>(2)),
+			.5,
+			cv::Scalar(0, 0, 255),
+			2);
+	}
+}
+
+void Tracker::motionHeuristics(cv::Mat& _R, cv::Mat& _t, int j)
+{
+	if (_t.at<double>(2) < 0 && _R.at<double>(0, 0) > .0
+		&& _R.at<double>(1, 1) > .0 && _R.at<double>(2, 2) > .0
+		&& std::abs(_t.at<double>(2)) > std::max(std::abs(_t.at<double>(0)), std::abs(_t.at<double>(1)))
+		&& std::abs(_t.at<double>(2)) < 2 * scale)
+	{
+		t_s.push_back(_t.clone());
+		R_s.push_back(_R.clone());
+
+		_t = R[j] * _t + t[j];
+		_R = _R*R[j];
+	}
+	else
+	{
+		_t = .5*t_s[j - 1];
+		_R = R_s[j - 1];
+
+		t_s.push_back(t_s[j - 1].clone());
+		R_s.push_back(R_s[j - 1].clone());
+
+		_t = R[j] * t_s[j - 1] + t[j];
+		_R = R_s[j - 1] * R[j];
+
+		/*_t = cv::Mat::zeros(3, 1, CV_64F);
+		_t.at<double>(2) = -scale;
+		_R = cv::Mat::eye(3, 3, CV_64F);
+
+		t_s.push_back(_t.clone());
+		R_s.push_back(_R.clone());
+
+		_t = R[j] * _t + t[j];
+		_R = _R*R[j];*/
+	}
+}
+
 void Tracker::addFrame(Frame& frame)
 {
-	if (frames.size() >= init_frames && !init)
-	{
-		initialise();
-	}
 	frame.frame = frames.size();
 	frames.push_back(frame);
 
@@ -261,86 +365,108 @@ void Tracker::addFrame(Frame& frame)
 		std::cout << tock() << " seconds for feature matching ";
 
 		std::vector<cv::Point> p1, p2;
+		std::vector<int> corr;
 
-		for (auto& f : features)
-			p1.push_back(f.point());
-		for (auto& f : new_feats)
-			p2.push_back(f.point());
-
-		tick();
-		cv::Mat _R, _t, mask;
-		cv::Mat E = cv::findEssentialMat(p1, p2, camera, cv::RANSAC, 0.99, 1, mask);
-		std::cout << tock() << " seconds for finding E ";
-		tick();
-		cv::recoverPose(E, p1, p2, camera, _R, _t, mask);
-		std::cout << tock() << " seconds for pose estimation " << std::endl;
-
-		// possible heuristics
-		//if ((_t.at<double>(2) > _t.at<double>(0)) && (_t.at<double>(2) > _t.at<double>(1)))
-		//{
-			R.push_back(_R);
-			t.push_back(_t);
-		//}
-
-		if (t.size())
+		for (int i = 0; i < features.size(); i++)
 		{
-			for (int i = 1; i < t.size(); i++)
-			{
-				cv::Mat __R, __t, mask;
-				__R = R[0].clone();
-				__t = t[0].clone();
-
-				for (int j = 1; j <= i; j++)
-				{
-					cv::Mat dist = gt_t[j] - gt_t[j - 1];
-					double scale = std::sqrt(
-						std::pow(dist.at<double>(0), 2) +
-						std::pow(dist.at<double>(1), 2) +
-						std::pow(dist.at<double>(2), 2));
-
-					__t += scale*(__R*t[j]);
-					__R = R[j] * __R;
-					cv::circle(
-						map,
-						cv::Point(map.cols / 2 + (int)__t.at<double>(0), map.rows - 8 + (int)__t.at<double>(2)),
-						.5,
-						cv::Scalar(0, 255, 0),
-						2);
-
-					cv::circle(
-						map,
-						cv::Point(map.cols / 2 + (int)gt_t[j].at<double>(0), map.rows - 8 - (int)gt_t[j].at<double>(2)),
-						.5,
-						cv::Scalar(0, 0, 255),
-						2);
-				}
-			}
-		}
-
-		if (fancy_video)
-		{
-			cv::Mat roi = frame.orig(cv::Rect(0, frame.orig.rows - 256, 256, 256));
-			cv::Mat colour = cv::Mat::zeros(roi.size(), frame.orig.type());
-			cv::resize(map, colour, colour.size());
-			double alpha = 0.75;
-			cv::addWeighted(colour, alpha, roi, 1.0 - alpha, 0.0, roi);
-
-			/*for (int i = 0; i < new_feats.size(); i++)
-			{
 			if (new_feats[i].tracked)
 			{
-			circle(frame.orig, new_feats[i].point(), 5, cv::Scalar(0, 255, 255));
-			line(frame.orig, features[i].point(), new_feats[i].point(), cv::Scalar(0, 255, 255));
+				p1.push_back(features[i].point());
+				p2.push_back(new_feats[i].point());
+				corr.push_back(features[i].id);
+
+				features[i].row = new_feats[i].row;
+				features[i].column = new_feats[i].column;
 			}
-			}*/
+			else
+				features[i].tracked = false;
 		}
-		features = new_feats;
-		
-		cv::imshow("map", map);
-		cv::imshow("test", frame.orig);
-		cv::waitKey(10);
+		countTrackedFeatures3D();
+
+		int j = t.size() - 1;
+		cv::Mat _R = R[j].clone(), _t = t[j].clone(), mask, tri;
+
+		if (j > 1)
+		{
+			cv::Mat dist = gt_t[j] - gt_t[j - 1];
+			scale = std::sqrt(
+				std::pow(dist.at<double>(0), 2) +
+				std::pow(dist.at<double>(1), 2) +
+				std::pow(dist.at<double>(2), 2));
+		}
+		else
+		{
+			scale = 1;
+		}
+
+		if (true && feats3d.size() >= tracked_features_tol)
+		{
+			std::vector<cv::Point3f> objectPoints;
+			std::vector<cv::Point2f> imagePoints;
+			cv::Mat _R_rod;
+			cv::Rodrigues(_R, _R_rod);
+
+			for (auto f3d : feats3d)
+			{
+				f3d.transformInv(R[j], t[j]);
+
+				cv::Point3f p3f = f3d.getPoint();
+				p3f.z *= -1;
+
+				objectPoints.push_back(p3f);
+				imagePoints.push_back(getFeature(f3d.feature).getPoint());
+			}
+			cv::solvePnPRansac(objectPoints, imagePoints, camera, cv::Mat(), _R_rod, _t, true);
+			cv::Rodrigues(_R_rod, _R);
+
+			motionHeuristics(_R, _t, j);
+		}
+		else
+		{
+			tick();
+			cv::Mat E = cv::findEssentialMat(p1, p2, camera, cv::RANSAC, 0.99, 1, mask);
+			std::cout << tock() << " seconds for finding E ";
+			tick();
+			cv::recoverPose(E, p1, p2, camera, _R, _t, HUGE_VAL, mask, tri);
+
+			_t = scale*_t;
+			motionHeuristics(_R, _t, j);
+
+			for (int i = 0; i < tri.cols; i++)
+			{
+				Feature3D f3d(
+					scale*tri.at<double>(0, i) / tri.at<double>(3, i),
+					scale*tri.at<double>(1, i) / tri.at<double>(3, i),
+					scale*tri.at<double>(2, i) / tri.at<double>(3, i) * -1,
+					corr[i]);
+				src.feats3d.push_back(f3d);
+
+				if (f3d.getPoint().z < 0)
+				{
+					f3d.transform(R[j], t[j]);
+					feats3d.push_back(f3d);
+				}
+			}
+			init3d = true;
+		}
+		countTrackedFeatures();
+		std::cout << tock() << " seconds for pose estimation " << std::endl;
+
+		t.push_back(_t);
+		R.push_back(_R);
+
+		drawMap();
 	}
-	countTrackedFeatures();
+
+	if (frames.size() >= init_frames && !init)
+	{
+		initialise();
+		countTrackedFeatures();
+		cv::Mat _R = ((cv::Mat_<double>(3, 3)) << 1, 0, 0, 0, 1, 0, 0, 0, 1);
+		cv::Mat _t = ((cv::Mat_<double>(3, 1)) << 0, 0, 0);
+		R.push_back(_R);
+		t.push_back(_t);
+	}
 
 	if (init && tracked_features + tracked_features_tol < min_tracked_features)
 	{
@@ -349,8 +475,6 @@ void Tracker::addFrame(Frame& frame)
 		if (verbose)
 			std::cout << "Trying to find " << n << " new features" << 
 			" in frame #" << (frames.size() - 1) << std::endl;
-
-		std::vector<Feature> new_feats = extractor->extractFeatures(frame, n);
 
 		std::vector<GridSection> roi = getGridROI(frames[frames.size() - 1]);
 		int n_grid = std::ceil((double)n / (double)roi.size());
@@ -361,8 +485,8 @@ void Tracker::addFrame(Frame& frame)
 
 			for (auto& f : new_feats)
 			{
-				if (features.size() >= min_tracked_features + tracked_features_tol)
-					break;
+				//if (features.size() >= min_tracked_features + tracked_features_tol)
+				//	break;
 				//if (!f.hasNeighbor(features))
 				//{
 					f.column = r.x*grid_size[1] + f.column;
@@ -374,6 +498,38 @@ void Tracker::addFrame(Frame& frame)
 		if (verbose)
 			std::cout << "Feature extraction took " << tock() << " seconds";
 	}
+
+	if (fancy_video)
+	{
+		cv::Mat roi = frame.orig(cv::Rect(0, frame.orig.rows - frame.orig.rows, frame.orig.rows, frame.orig.rows));
+		cv::Mat colour = cv::Mat::zeros(roi.size(), frame.orig.type());
+		cv::resize(map, colour, colour.size());
+		double alpha = 0.75;
+		cv::addWeighted(colour, alpha, roi, 1.0 - alpha, 0.0, roi);
+
+		/*for (int i = 0; i < new_feats.size(); i++)
+		{
+		if (new_feats[i].tracked)
+		{
+		circle(frame.orig, new_feats[i].point(), 5, cv::Scalar(0, 255, 255));
+		line(frame.orig, features[i].point(), new_feats[i].point(), cv::Scalar(0, 255, 255));
+		}
+		}*/
+	}
+	cv::imshow("map", map);
+	cv::imshow("test", frame.orig);
+	cv::waitKey(10);
+}
+
+Feature& Tracker::getFeature(int id)
+{
+	for (auto& f : features)
+	{
+		if (f.id == id)
+			return f;
+	}
+	Feature f = Feature();
+	return f;
 }
 
 void Tracker::initialise()
@@ -421,7 +577,7 @@ void Tracker::initialise()
 		}
 	}
 	init = true;
-
+	init_count = best->frame + 1;
 	if (verbose)
 		std::cout << "Initialised using " << features.size() << 
 		" features from frame #" << best->frame << std::endl;
@@ -462,6 +618,25 @@ std::vector<Tracker::GridSection> Tracker::getGridROI(Frame& fr)
 	return roi;
 }
 
+void Tracker::countTrackedFeatures3D()
+{
+	std::vector<Feature3D> new_feats3d;
+	tracked_features = 0;
+
+	if (init3d)
+	{
+		for (auto& f3d : feats3d)
+		{
+			if (getFeature(f3d.feature).tracked)
+			{
+				new_feats3d.push_back(f3d);
+				tracked_features++;
+			}
+		}
+		feats3d = new_feats3d;
+	}
+}
+
 void Tracker::countTrackedFeatures()
 {
 	std::vector<Feature> new_feats;
@@ -469,8 +644,6 @@ void Tracker::countTrackedFeatures()
 
 	for (auto& f : features)
 	{
-		if (tracked_features >= min_tracked_features + tracked_features_tol)
-			break;
 		if (f.tracked)
 		{
 			new_feats.push_back(f);

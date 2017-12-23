@@ -11,14 +11,17 @@ class Tracker
 {
 private:
 	bool init = false;
+	bool init3d = false;
+	int init_count;
+	double scale;
 
 public:
 	int tracked_features = 0;
-	int min_tracked_features = 4000;
-	int tracked_features_tol = 1000;
+	int min_tracked_features = 650;
+	int tracked_features_tol = 450;
 	int init_frames = 5;
 	int grid_size[2] = {255, 255};
-	int stop = 350;
+	int stop = 360;
 
 	bool verbose = true;
 	bool fancy_video = true;
@@ -29,17 +32,18 @@ public:
 	// Camera matrix
 	cv::Mat camera = cv::Mat_<double>(3, 3);
 
-	cv::Mat map = cv::Mat::zeros(512, 512, CV_8UC3);
+	cv::Mat map = cv::Mat::zeros(400, 400, CV_8UC3);
 
 	std::vector<Feature> features;
 	std::vector<Frame> frames;
+	std::vector<Feature3D> feats3d;
 
 	BaseFeatureExtractor* extractor;
 	BaseFeatureMatcher* matcher;
 
 	std::vector<cv::Mat> t, R, gt_t, gt_R;
 
-	cv::Mat curr_t, curr_R;
+	std::vector<cv::Mat> t_s, R_s;
 
 	std::vector<double> ticktock;
 
@@ -146,7 +150,15 @@ public:
 	*/
 	void start();
 
+	Feature& Tracker::getFeature(int id);
+
+	void countTrackedFeatures3D();
+
+	void drawMap();
+
 private:
 	void countTrackedFeatures();
+
+	void motionHeuristics(cv::Mat& _R, cv::Mat& _t, int j);
 };
 #endif

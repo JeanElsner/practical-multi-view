@@ -28,6 +28,10 @@ void OpenCVLucasKanadeFM::matchFeatures(
 		{
 			f.tracked = true;
 		}
+		else
+		{
+			f.tracked = false;
+		}
 		new_feats.push_back(f);
 	}
 }
