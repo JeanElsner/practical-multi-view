@@ -7,7 +7,7 @@ class OpenCVFASTFeatureExtractor :
 	public BaseFeatureExtractor
 {
 public:
-	int threshold = 50;
+	int threshold = 10;
 	bool nonmax = true;
 
 	virtual std::vector<Feature> extractFeatures(Frame& src, int max);

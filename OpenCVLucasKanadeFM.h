@@ -5,14 +5,12 @@
 class OpenCVLucasKanadeFM :
 	public BaseFeatureMatcher
 {
-public:
+private:
+	int win_size = 21;
+	int pyr_size = 4;
 
-	virtual void matchFeatures(
-		Frame& src,
-		Frame& next,
-		std::vector<Feature>& feats,
-		std::vector<Feature>& new_feats
-	);
+public:
+	virtual fmap matchFeatures(Frame& src, Frame& next);
 
 };
 #endif

@@ -53,11 +53,11 @@ vector<Feature> grid_feature_extraction(Frame& I, const unsigned char size[2], c
 					f.row = r + f.row;
 					if (count >= fn)
 						break;
-					if (!f.hasNeighbor(feats))
-					{
+					//if (!f.hasNeighbor(feats))
+					//{
 						count++;
 						feats.push_back(f);
-					}
+					//}
 				}
 			}
 		}

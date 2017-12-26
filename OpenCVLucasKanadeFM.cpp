@@ -2,36 +2,31 @@
 #include <opencv2/core.hpp>
 #include <opencv2/video/tracking.hpp>
 
-void OpenCVLucasKanadeFM::matchFeatures(
-	Frame & src, 
-	Frame & next, 
-	std::vector<Feature>& feats, 
-	std::vector<Feature>& new_feats
-)
+BaseFeatureMatcher::fmap OpenCVLucasKanadeFM::matchFeatures(Frame & src, Frame & next)
 {
-	std::vector<cv::Point2f> points, next_points;
+	fmap correspondences;
+	std::vector<cv::Point2f> prev_points, next_points;
 
-	for (auto const& f : feats)
+	for (auto const& p : src.map)
 	{
-		points.push_back(cv::Point2f(f.column, f.row));
+		prev_points.push_back(cv::Point2f(p.first.column, p.first.row));
 	}
 
 	std::vector<uchar> status;
 	std::vector<float> err;
-	cv::calcOpticalFlowPyrLK(src.bw, next.bw, points, next_points, status, err, cv::Size(21, 21), 4);
+	cv::calcOpticalFlowPyrLK(src.bw, next.bw, prev_points, next_points, status, err, cv::Size(win_size, win_size), pyr_size);
 
-	for (int i = 0; i < feats.size(); i++)
+	int i = 0;
+
+	for (auto const& p : src.map)
 	{
-		Feature f(next_points[i].x, next_points[i].y);
-
 		if (status[i])
 		{
-			f.tracked = true;
+			Feature f = Feature(next_points[i].x, next_points[i].y);
+			next.map[f] = std::weak_ptr<Feature3D>(p.second);
+			correspondences[p.first] = f;
 		}
-		else
-		{
-			f.tracked = false;
-		}
-		new_feats.push_back(f);
+		i++;
 	}
+	return correspondences;
 }

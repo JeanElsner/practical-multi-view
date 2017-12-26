@@ -14,6 +14,7 @@ std::vector<Feature> OpenCVGoodFeatureExtractor::extractFeatures(Frame& src, int
 		f.row = c.y;
 		f.column = c.x;
 		f.detector = Feature::extractor::cv_good;
+		f.tracked = true;
 		feats.push_back(f);
 	}
 	return feats;

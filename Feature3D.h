@@ -8,19 +8,15 @@ class Feature3D
 public:
 	cv::Point3f p3f;
 
-	int feature;
+	/**
+		Constructs an object based on the given 3D coordinates
+	**/
+	Feature3D(double x, double y, double z) : Feature3D(cv::Point3f(x, y, z)) {}
 
 	/**
-		Constructs an object based on the given
-		3d space coordinates and corresponding 2d feature
+		Constructs an object based on the given 3D point
 	**/
-	Feature3D(double x, double y, double z, int feature) : Feature3D(cv::Point3f(x, y, z), feature) {}
-
-	/**
-		Constructs an object based on the given 3d point
-		and corresponding 2d feature
-	**/
-	Feature3D(cv::Point3f p3f, int feature) : p3f(p3f), feature(feature) {}
+	Feature3D(cv::Point3f p3f) : p3f(p3f) {}
 
 	/**
 		Gets the 3d points this feature corresponds to

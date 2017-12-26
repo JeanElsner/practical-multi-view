@@ -5,6 +5,8 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #include <vector>
+#include <unordered_map>
+#include <memory>
 #include "Feature3D.h"
 
 class Frame
@@ -20,7 +22,7 @@ private:
 	Frame() { }
 
 public:
-	std::vector<Feature3D> feats3d;
+	std::unordered_map<Feature, std::weak_ptr<Feature3D>, Feature::Hasher> map;
 
 	// Original image and black and white version
 	cv::Mat orig, bw;
@@ -81,5 +83,9 @@ public:
 		@return New frame confined to the ROI
 	*/
 	Frame regionOfInterest(cv::Rect& rect);
+
+	int count3DPoints();
+
+	Feature get2DFeature(std::weak_ptr<Feature3D>& f3d);
 };
 #endif

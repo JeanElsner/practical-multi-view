@@ -1,5 +1,27 @@
 #include "Frame.h"
 
+Feature Frame::get2DFeature(std::weak_ptr<Feature3D>& f3d)
+{
+	for (auto& p : map)
+	{
+		if (p.second.lock() == f3d.lock())
+			return p.first;
+	}
+	return Feature();
+}
+
+int Frame::count3DPoints()
+{
+	int c = 0;
+
+	for (auto& p : map)
+	{
+		if (!p.second.expired())
+			c++;
+	}
+	return c;
+}
+
 Frame::Frame(cv::Mat & orig) : orig(orig)
 {
 	init();

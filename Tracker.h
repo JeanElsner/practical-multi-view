@@ -6,19 +6,19 @@
 #include "BaseFeatureMatcher.h"
 #include <vector>
 #include <exception>
+#include <memory>
 
 class Tracker
 {
 private:
 	bool init = false;
 	bool init3d = false;
-	int init_count;
+	int init_offset = 0;
 	double scale;
 
 public:
-	int tracked_features = 0;
-	int min_tracked_features = 650;
-	int tracked_features_tol = 450;
+	int min_tracked_features = 512;
+	int tracked_features_tol = 256;
 	int init_frames = 5;
 	int grid_size[2] = {255, 255};
 	int stop = 360;
@@ -34,9 +34,8 @@ public:
 
 	cv::Mat map = cv::Mat::zeros(400, 400, CV_8UC3);
 
-	std::vector<Feature> features;
+	std::vector<std::shared_ptr<Feature3D>> feats3d;
 	std::vector<Frame> frames;
-	std::vector<Feature3D> feats3d;
 
 	BaseFeatureExtractor* extractor;
 	BaseFeatureMatcher* matcher;
@@ -150,15 +149,15 @@ public:
 	*/
 	void start();
 
-	Feature& Tracker::getFeature(int id);
-
-	void countTrackedFeatures3D();
-
+	/**
+		Draws a top down view of the calculated trajectory and
+		features as well as the ground truth
+	**/
 	void drawMap();
 
-private:
-	void countTrackedFeatures();
+	Frame* currentFrame() { return &frames[frames.size() - 1]; }
 
+private:
 	void motionHeuristics(cv::Mat& _R, cv::Mat& _t, int j);
 };
 #endif

@@ -3,11 +3,14 @@
 #include "Frame.h"
 #include "Feature.h"
 #include <vector>
+#include <unordered_map>
 
 // Abstract base class, used to match features between frames
 class BaseFeatureMatcher
 {
 public:
+
+	typedef std::unordered_map < Feature, Feature, Feature::Hasher> fmap;
 
 	/**
 		Match a set of features from one frame and
@@ -15,14 +18,7 @@ public:
 
 		@param src Source image with features to match
 		@param next Image to match
-		@param feats Set of features from the source image
-		@param new_feats Output vector
 	*/
-	virtual void matchFeatures(
-		Frame& src, 
-		Frame& next, 
-		std::vector<Feature>& feats, 
-		std::vector<Feature>& new_feats
-	) = 0;
+	virtual fmap matchFeatures(Frame& src, Frame& next) = 0;
 };
 #endif
