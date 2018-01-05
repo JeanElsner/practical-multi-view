@@ -14,14 +14,15 @@ private:
 	bool init = false;
 	bool init3d = false;
 	int init_offset = 0;
-	double scale;
+	double scale = 1;
 
 public:
-	int min_tracked_features = 512;
-	int tracked_features_tol = 256;
+	int min_tracked_features = 600;
+	int tracked_features_tol = 400;
 	int init_frames = 5;
 	int grid_size[2] = {255, 255};
-	int stop = 360;
+	int stop = 400;
+	int bundle_size = 400;
 
 	bool verbose = true;
 	bool fancy_video = true;
@@ -156,6 +157,8 @@ public:
 	void drawMap();
 
 	Frame* currentFrame() { return &frames[frames.size() - 1]; }
+
+	void bundleAdjustment();
 
 private:
 	void motionHeuristics(cv::Mat& _R, cv::Mat& _t, int j);

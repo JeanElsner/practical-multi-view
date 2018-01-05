@@ -80,11 +80,23 @@ void Feature3D::transformInv(const cv::Mat& R, const cv::Mat& t)
 	rotate(inv);
 }
 
+void Feature3D::translate(const double x, const double y, const double z)
+{
+	update(p3f.x + x, p3f.y + y, p3f.z + z);
+}
+
 void Feature3D::translate(const cv::Mat& t)
 {
 	p3f.x += t.at<double>(0);
 	p3f.y += t.at<double>(1);
 	p3f.z += t.at<double>(2);
+}
+
+void Feature3D::update(const double x, const double y, const double z)
+{
+	p3f.x = x;
+	p3f.y = y;
+	p3f.z = z;
 }
 
 void Feature3D::translatePoint(const cv::Mat& t, cv::Point3f& point3d)

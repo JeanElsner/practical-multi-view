@@ -29,9 +29,13 @@ public:
 
 	void transformInv(const cv::Mat & R, const cv::Mat & t);
 
+	void translate(const double x, const double y, const double z);
+
 	void rotate(const cv::Mat& R);
 
 	void translate(const cv::Mat& t);
+
+	void update(const double x, const double y, const double z);
 
 	static void translatePoint(const cv::Mat& t, cv::Point3f& point3d);
 
