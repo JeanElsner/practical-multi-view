@@ -47,6 +47,17 @@ double Tracker::tock()
 	return (cv::getTickCount() - tock) / cv::getTickFrequency();
 }
 
+void Tracker::drawCross(const int radius, const cv::Point& pos, const cv::Scalar& color, cv::Mat& dst, int thickness)
+{
+	cv::Point a1 = cv::Point(pos.x - radius + 1, pos.y);
+	cv::Point a2 = cv::Point(pos.x + radius - 1, pos.y);
+	cv::line(dst, a1, a2, color, thickness);
+
+	a1 = cv::Point(pos.x, pos.y - radius + 1);
+	a2 = cv::Point(pos.x, pos.y + radius - 1);
+	cv::line(dst, a1, a2, color, thickness);
+}
+
 void Tracker::drawMap()
 {
 	int j = t.size() - 1;
@@ -70,15 +81,19 @@ void Tracker::drawMap()
 		else
 			color = cv::Scalar(255, 255, 0);
 
-		cv::circle(fr->orig, cv::Point(f->column, f->row), 3, color, .5);
+		//cv::circle(fr->orig, cv::Point(f->column, f->row), 3, color, .5);
 
-		//cv::circle(map, cv::Point(map.cols / 2 + f3d->getPoint().x, map.rows / 2 + f3d->getPoint().z), 1, color, -1);
+		drawCross(3, cv::Point(f->column, f->row), color, fr->orig, 1);
+
+		cv::circle(map, cv::Point(map.cols / 2 + f3d->getPoint().x, map.rows / 2 + f3d->getPoint().z), 1, color, -1);
+
+		//drawCross(3, cv::Point(map.cols / 2 + f3d->getPoint().x, map.rows / 2 + f3d->getPoint().z), color, map, 1);
 	}
 
-	for (auto& f3d : feats3d)
+	/*for (auto& f3d : feats3d)
 	{
 		cv::circle(map, cv::Point(map.cols / 2 + f3d->getPoint().x, map.rows / 2 + f3d->getPoint().z), .5, cv::Scalar(255, 255, 255), -1);
-	}
+	}*/
 
 	// Drawing rectangle representing position and orientation
 	int x = map.cols / 2 + (int)t[j].at<double>(0);
@@ -91,13 +106,13 @@ void Tracker::drawMap()
 		cv::line(map, vertices[i], vertices[(i + 1) % 4], cv::Scalar(0, 255, 0));
 
 	// Same as above but for the ground truth
-	/*x = map.cols / 2 + (int)gt_t[j].at<double>(0);
+	x = map.cols / 2 + (int)gt_t[j].at<double>(0);
 	y = map.rows / 2 - (int)gt_t[j].at<double>(2);
 	rRect = cv::RotatedRect(cv::Point2f(x, y), cv::Size2f(10, 15), std::acos(gt_R[j].at<double>(0, 0)) / 3.1416 * 180);
 	rRect.points(vertices);
 
 	for (int i = 0; i < 4; i++)
-		cv::line(map, vertices[i], vertices[(i + 1) % 4], cv::Scalar(0, 0, 255));*/
+		cv::line(map, vertices[i], vertices[(i + 1) % 4], cv::Scalar(0, 0, 255));
 
 	// Tracing the path of the calculated trajectory as well as the ground truth on the map
 	for (int i = init_offset; i <= j; i++)
@@ -111,12 +126,12 @@ void Tracker::drawMap()
 			cv::Scalar(0, 255, 0),
 			2);
 
-		/*cv::circle(
+		cv::circle(
 			map,
 			cv::Point(map.cols / 2 + (int)gt_t[i].at<double>(0), map.rows / 2 - (int)gt_t[i].at<double>(2)),
 			.5,
 			cv::Scalar(0, 0, 255),
-			2);*/
+			2);
 	}
 }
 
@@ -183,7 +198,7 @@ void Tracker::addFrame(Frame& frame)
 	int j = t.size() - 1;
 	cv::Mat _R = R[j].clone(), _t = t[j].clone(), mask, tri;
 
-	if (true && src.count3DPoints() >= tracked_features_tol)
+	if (src.count3DPoints() >= tracked_features_tol)
 	{
 		std::vector<cv::Point3f> obj_points;
 		std::vector<cv::Point2f> img_points;
@@ -312,8 +327,6 @@ void Tracker::bundleAdjustment()
 {
 	int n = std::min(bundle_size, (int)frames.size());
 
-	//if (n < bundle_size)
-	//	return;
 	double _camera[] = {
 		camera.at<double>(0, 0), camera.at<double>(0, 1), camera.at<double>(0, 2),
 		camera.at<double>(1, 0), camera.at<double>(1, 1), camera.at<double>(1, 2),
@@ -328,35 +341,18 @@ void Tracker::bundleAdjustment()
 	{
 		Frame* frame = &frames[i];
 
-		/*double _R[] = {
-			1, 0, 0,
-			0, 1, 0,
-			0, 0, 1
-		};
-		double _t[] = { 0, 0, 0 };*/
-
 		cv::Mat rod = cv::Mat_<double>(3, 1);
-		cv::Rodrigues(R_s[i], rod);
-
-		/*double _R[] = {
-			R_s[i].at<double>(0, 0), R_s[i].at<double>(0, 1), R_s[i].at<double>(0, 2),
-			R_s[i].at<double>(1, 0), R_s[i].at<double>(1, 1), R_s[i].at<double>(1, 2),
-			R_s[i].at<double>(2, 0), R_s[i].at<double>(2, 1), R_s[i].at<double>(2, 2)
-		};
-		double _t[] = { t_s[i].at<double>(0), t_s[i].at<double>(1), t_s[i].at<double>(2) };*/
+		cv::Mat R_transpose = cv::Mat_<double>(3, 3);
+		cv::transpose(R[i], R_transpose);
+		cv::Rodrigues(R_transpose, rod);
 
 		tr_opt[i] = new double[6]{
 			rod.at<double>(0), rod.at<double>(1), rod.at<double>(2),
-			t_s[i].at<double>(0), t_s[i].at<double>(1), t_s[i].at<double>(2)
+			-t[i].at<double>(0), -t[i].at<double>(1), -t[i].at<double>(2)
 		};
-
-		/*R_opt[i] = _R;
-		t_opt[i] = _t;*/
 
 		if (i == 0)
 			continue;
-
-
 
 		for (auto& p : frame->map)
 		{
@@ -364,68 +360,28 @@ void Tracker::bundleAdjustment()
 				continue;
 			std::shared_ptr<Feature3D> f3d = p.second.lock();
 			Feature f = p.first;
-			//f3d->transformInv(R[i-1], t[i-1]);
 
 			cv::Point3f p3f = f3d->getPoint();
-			//p3f.z *= -1;
-
-			cv::Mat test_R = R_s[0].clone();
-			cv::Mat test_t = t_s[0].clone();
-
-			R_inv[i] = new double[9] {
-				R[i].at<double>(0, 0), R[i].at<double>(1, 0), R[i].at<double>(2, 0),
-				R[i].at<double>(0, 1), R[i].at<double>(1, 1), R[i].at<double>(2, 1),
-				R[i].at<double>(0, 2), R[i].at<double>(1, 2), R[i].at<double>(2, 2)
-			};
-			t_inv[i] = new double[3] { t[i].at<double>(0), t[i].at<double>(1), t[i].at<double>(2) };
-
-			cv::Point3f p3f2 = p3f, p3f3;
-
-			p3f2.x -= t_inv[i][0];
-			p3f2.y -= t_inv[i][1];
-			p3f2.z -= t_inv[i][2];
-
-			p3f3.x = R_inv[i][0] * p3f2.x + R_inv[i][1] * p3f2.y + R_inv[i][2] * p3f2.z;
-			p3f3.y = R_inv[i][3] * p3f2.x + R_inv[i][4] * p3f2.y + R_inv[i][5] * p3f2.z;
-			p3f3.z = R_inv[i][6] * p3f2.x + R_inv[i][7] * p3f2.y + R_inv[i][8] * p3f2.z;
-
-			p3f3.z *= -1;
-
-			cv::Point2f p2f;
-			Feature3D::projectPoint(test_R, test_t, camera, p3f3, p2f);
-
-			//std::cout << p2f.x - f.column << " " << p2f.y - f.row << std::endl;
-
-			/*double R_opt[] = {
-				R_s[i].at<double>(0, 0), R_s[i].at<double>(0, 1), R_s[i].at<double>(0, 2),
-				R_s[i].at<double>(1, 0), R_s[i].at<double>(1, 1), R_s[i].at<double>(1, 2),
-				R_s[i].at<double>(2, 0), R_s[i].at<double>(2, 1), R_s[i].at<double>(2, 2)
-			};
-			double t_opt[] = { t_s[i].at<double>(0), t_s[i].at<double>(1), t_s[i].at<double>(2) };*/
 			
 			p2d[i] = new double[2] { (double)f.column, (double)f.row };
 
 			if (!p3d_opt.count(f3d))
 				p3d_opt[f3d] = new double[3]{ p3f.x, p3f.y, p3f.z };
 
-			ceres::CostFunction* cost_function = ProjectionResidual::Create(p2d[i], _camera, R_inv[i], t_inv[i]);
+			ceres::CostFunction* cost_function = ProjectionResidual::Create(p2d[i], _camera);
 			problem.AddResidualBlock(cost_function, new ceres::HuberLoss(1.0), tr_opt[i], p3d_opt[f3d]);
-			//f3d->transform(R[i-1], t[i-1]);
 		}
 	}
 	;
 	ceres::Solver::Options options;
 	options.linear_solver_type = ceres::SPARSE_SCHUR;
 	options.minimizer_progress_to_stdout = true;
-	options.num_threads = 8;
-	//options.max_num_iterations = 15;
+	options.num_threads = 4;
+	options.max_num_iterations = 3;
 	ceres::Solver::Summary summary;
 	ceres::Solve(options, &problem, &summary);
 	std::cout << summary.FullReport() << "\n";
 	
-	//if (summary.initial_cost > 10e5)
-	//	return;
-
 	for (int i = frames.size() - n; i < frames.size(); i++)
 	{
 		if (i == 0)
@@ -438,65 +394,14 @@ void Tracker::bundleAdjustment()
 		cv::Mat _t = cv::Mat_<double>(3, 1, __t);
 		cv::Mat rod = cv::Mat_<double>(3, 1, __rod);
 		cv::Rodrigues(rod, _R);
-		//cv::transpose(rod, rod);
+		cv::transpose(_R, _R);
 
-		_t = R[i] * _t + t[i];
-		_R = _R*R[i];
 		R[i] = _R.clone();
-		t[i] = _t.clone();
+		t[i] = -_t.clone();
 
 		for (auto& p : p3d_opt)
 		{
 			p.first->update(p.second[0], p.second[1], p.second[2]);
-		}
-	}
-
-	////////////////////////////////////////////////
-	// calculate residuals after update
-	////////////////////////////////////////////////
-	for (int i = frames.size() - n; i < frames.size(); i++)
-	{
-		Frame* frame = &frames[i];
-		
-		if (i == 0)
-			continue;
-
-		for (auto& p : frame->map)
-		{
-			if (p.second.expired())
-				continue;
-			Feature f = p.first;
-			std::shared_ptr<Feature3D> f3d = p.second.lock();
-			//f3d->transformInv(R[i-1], t[i-1]);
-
-			cv::Point3f p3f = f3d->getPoint();
-
-			cv::Mat test_R = R_s[0].clone();
-			cv::Mat test_t = t_s[0].clone();
-
-			R_inv[i] = new double[9]{
-				R[i].at<double>(0, 0), R[i].at<double>(1, 0), R[i].at<double>(2, 0),
-				R[i].at<double>(0, 1), R[i].at<double>(1, 1), R[i].at<double>(2, 1),
-				R[i].at<double>(0, 2), R[i].at<double>(1, 2), R[i].at<double>(2, 2)
-			};
-			t_inv[i] = new double[3]{ t[i].at<double>(0), t[i].at<double>(1), t[i].at<double>(2) };
-
-			cv::Point3f p3f2 = p3f, p3f3;
-
-			p3f2.x -= t_inv[i][0];
-			p3f2.y -= t_inv[i][1];
-			p3f2.z -= t_inv[i][2];
-
-			p3f3.x = R_inv[i][0] * p3f2.x + R_inv[i][1] * p3f2.y + R_inv[i][2] * p3f2.z;
-			p3f3.y = R_inv[i][3] * p3f2.x + R_inv[i][4] * p3f2.y + R_inv[i][5] * p3f2.z;
-			p3f3.z = R_inv[i][6] * p3f2.x + R_inv[i][7] * p3f2.y + R_inv[i][8] * p3f2.z;
-
-			p3f3.z *= -1;
-
-			cv::Point2f p2f;
-			Feature3D::projectPoint(test_R, test_t, camera, p3f3, p2f);
-
-			//std::cout << p2f.x - f.column << " " << p2f.y - f.row << std::endl;
 		}
 	}
 }
@@ -545,7 +450,6 @@ void Tracker::initialise()
 			best = fr;
 			cost = _cost;
 			init_offset = i;
-			//features = best_feats;
 		}
 		i++;
 	}
@@ -560,7 +464,7 @@ void Tracker::initialise()
 
 Tracker::Tracker(std::string cfg)
 {
-	extractor = new OpenCVFASTFeatureExtractor();
+	extractor = new OpenCVGoodFeatureExtractor();
 	matcher = new OpenCVLucasKanadeFM();
 
 	std::ifstream cfg_file;

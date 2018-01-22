@@ -6,7 +6,7 @@ class OpenCVLucasKanadeFM :
 	public BaseFeatureMatcher
 {
 private:
-	int win_size = 21;
+	int win_size = 32;
 	int pyr_size = 4;
 
 public:

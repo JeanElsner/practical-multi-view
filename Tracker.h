@@ -17,12 +17,12 @@ private:
 	double scale = 1;
 
 public:
-	int min_tracked_features = 600;
-	int tracked_features_tol = 400;
+	int min_tracked_features = 400;
+	int tracked_features_tol = 300;
 	int init_frames = 5;
 	int grid_size[2] = {255, 255};
 	int stop = 400;
-	int bundle_size = 400;
+	int bundle_size = 6;
 
 	bool verbose = true;
 	bool fancy_video = true;
@@ -30,12 +30,15 @@ public:
 	std::vector<cv::String> file_names;
 	std::vector<int> timestamps;
 
-	// Camera matrix
+	// Camera calibration
 	cv::Mat camera = cv::Mat_<double>(3, 3);
 
+	// Trajectories and features are drawn here
 	cv::Mat map = cv::Mat::zeros(400, 400, CV_8UC3);
 
+	// Containts all the known 3d feature points
 	std::vector<std::shared_ptr<Feature3D>> feats3d;
+
 	std::vector<Frame> frames;
 
 	BaseFeatureExtractor* extractor;
@@ -156,9 +159,19 @@ public:
 	**/
 	void drawMap();
 
+	/**
+		Returns the last frame added to the tracker
+
+		@return Frame reference
+	**/
 	Frame* currentFrame() { return &frames[frames.size() - 1]; }
 
+	/**
+		Performs bundle adjustment of the last  bundle_size frames
+	**/
 	void bundleAdjustment();
+
+	void drawCross(const int radius, const cv::Point& pos, const cv::Scalar& color,  cv::Mat& dst, int thickness = 1);
 
 private:
 	void motionHeuristics(cv::Mat& _R, cv::Mat& _t, int j);

@@ -3,8 +3,11 @@
 void Feature3D::projectPoint(const cv::Mat& R, const cv::Mat& t, const cv::Mat& camera, const cv::Point3f& point3d, cv::Point2f& point2d)
 {
 	cv::Point3f p3f = point3d;
+	
+	translatePoint(-t, p3f);
+	cv::transpose(R, R);
 	rotatePoint(R, p3f);
-	translatePoint(t, p3f);
+	p3f.z *= -1;
 
 	double magic_z = p3f.z ? 1. / p3f.z : 1;
 
@@ -17,11 +20,18 @@ void Feature3D::projectPoint(
 {
 	double x_p = point3d[0], y_p = point3d[1], z_p = point3d[2];
 
-	rotatePoint(R, x_p, y_p, z_p);
+	x_p -= t[0];
+	y_p -= t[1];
+	z_p -= t[2];
+	double x_R, y_R, z_R;
 
-	x_p += t[0];
-	y_p += t[1];
-	z_p += t[2];
+	x_R = R[0] * x_p + R[1] * y_p + R[2] * z_p;
+	y_R = R[3] * x_p + R[4] * y_p + R[5] * z_p;
+	z_R = R[6] * x_p + R[7] * y_p + R[8] * z_p;
+
+	x_p = x_R;
+	y_p = y_R;
+	z_p = z_R;
 
 	double magic_z = z_p ? 1. / z_p : 1;
 
