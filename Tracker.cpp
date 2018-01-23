@@ -85,7 +85,7 @@ void Tracker::drawMap()
 
 		drawCross(3, cv::Point(f->column, f->row), color, fr->orig, 1);
 
-		cv::circle(map, cv::Point(map.cols / 2 + f3d->getPoint().x, map.rows / 2 + f3d->getPoint().z), 1, color, -1);
+		cv::circle(map, cv::Point(map.cols / 2 + f3d->getPoint().x, map.rows / 1.2 + f3d->getPoint().z), 1, color, -1);
 
 		//drawCross(3, cv::Point(map.cols / 2 + f3d->getPoint().x, map.rows / 2 + f3d->getPoint().z), color, map, 1);
 	}
@@ -96,9 +96,10 @@ void Tracker::drawMap()
 	}*/
 
 	// Drawing rectangle representing position and orientation
+
 	int x = map.cols / 2 + (int)t[j].at<double>(0);
-	int y = map.rows / 2 + (int)t[j].at<double>(2);
-	cv::RotatedRect rRect = cv::RotatedRect(cv::Point2f(x, y), cv::Size2f(10, 15), std::acos(R[j].at<double>(0, 0)) / 3.1416 * 180);
+	int y = map.rows / 1.2 + (int)t[j].at<double>(2);
+	cv::RotatedRect rRect = cv::RotatedRect(cv::Point2f(x, y), cv::Size2f(10, 15), calcYRotation(R[j]) / 3.1416 * 180);
 	cv::Point2f vertices[4];
 	rRect.points(vertices);
 
@@ -107,8 +108,8 @@ void Tracker::drawMap()
 
 	// Same as above but for the ground truth
 	x = map.cols / 2 + (int)gt_t[j].at<double>(0);
-	y = map.rows / 2 - (int)gt_t[j].at<double>(2);
-	rRect = cv::RotatedRect(cv::Point2f(x, y), cv::Size2f(10, 15), std::acos(gt_R[j].at<double>(0, 0)) / 3.1416 * 180);
+	y = map.rows / 1.2 - (int)gt_t[j].at<double>(2);
+	rRect = cv::RotatedRect(cv::Point2f(x, y), cv::Size2f(10, 15), calcYRotation(gt_R[j], true) / 3.1416 * 180);
 	rRect.points(vertices);
 
 	for (int i = 0; i < 4; i++)
@@ -118,7 +119,7 @@ void Tracker::drawMap()
 	for (int i = init_offset; i <= j; i++)
 	{
 		int x = map.cols / 2 + (int)t[i].at<double>(0);
-		int y = map.rows / 2 + (int)t[i].at<double>(2);
+		int y = map.rows / 1.2 + (int)t[i].at<double>(2);
 		cv::circle(
 			map,
 			cv::Point(x, y),
@@ -128,7 +129,7 @@ void Tracker::drawMap()
 
 		cv::circle(
 			map,
-			cv::Point(map.cols / 2 + (int)gt_t[i].at<double>(0), map.rows / 2 - (int)gt_t[i].at<double>(2)),
+			cv::Point(map.cols / 2 + (int)gt_t[i].at<double>(0), map.rows / 1.2 - (int)gt_t[i].at<double>(2)),
 			.5,
 			cv::Scalar(0, 0, 255),
 			2);
@@ -137,8 +138,7 @@ void Tracker::drawMap()
 
 void Tracker::motionHeuristics(cv::Mat& _R, cv::Mat& _t, int j)
 {
-	if (_t.at<double>(2) < 0 && _R.at<double>(0, 0) > .0
-		&& _R.at<double>(1, 1) > .0 && _R.at<double>(2, 2) > .0
+	if (_t.at<double>(2) < 0 && calcYRotation(_R) < 3.1415/8
 		&& std::abs(_t.at<double>(2)) > std::max(std::abs(_t.at<double>(0)), std::abs(_t.at<double>(1)))
 		&& std::abs(_t.at<double>(2)) < 2 * scale)
 	{
@@ -162,7 +162,7 @@ void Tracker::motionHeuristics(cv::Mat& _R, cv::Mat& _t, int j)
 		_R = R_s[j ] * R[j];
 
 		/*_t = cv::Mat::zeros(3, 1, CV_64F);
-		_t.at<double>(2) = -scale;
+		_t.at<double>(2) = 0;
 		_R = cv::Mat::eye(3, 3, CV_64F);
 
 		t_s.push_back(_t.clone());
@@ -223,7 +223,6 @@ void Tracker::addFrame(Frame& frame)
 		}
 		cv::solvePnPRansac(obj_points, img_points, camera, cv::Mat(), _R_rod, _t, true);
 		cv::Rodrigues(_R_rod, _R);
-
 		motionHeuristics(_R, _t, j);
 	}
 	else
@@ -372,12 +371,11 @@ void Tracker::bundleAdjustment()
 			problem.AddResidualBlock(cost_function, new ceres::HuberLoss(1.0), tr_opt[i], p3d_opt[f3d]);
 		}
 	}
-	;
 	ceres::Solver::Options options;
 	options.linear_solver_type = ceres::SPARSE_SCHUR;
 	options.minimizer_progress_to_stdout = true;
 	options.num_threads = 4;
-	options.max_num_iterations = 3;
+	options.max_num_iterations = ba_iterations;
 	ceres::Solver::Summary summary;
 	ceres::Solve(options, &problem, &summary);
 	std::cout << summary.FullReport() << "\n";

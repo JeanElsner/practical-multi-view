@@ -18,10 +18,23 @@ public:
 		const double* p2d, 
 		const double* camera) : p2d(p2d), camera(camera) {}
 
+	/**
+		Creates a cost function based on this residual
+
+		@param p2d A 2D feature
+		@param camera Camera matrix
+		@return The associated cost function
+	**/
 	static ceres::CostFunction* ProjectionResidual::Create(
 		const double* p2d,
 		const double* camera);
 	
+	/**
+		Operator overload as called by the ceres cost function
+
+		@param tr_opt Camera pose that should be optimised
+		@param p3d_opt 3D point that should be optimised
+	**/
 	template <typename T>
 	bool operator()(
 		const T* const tr_opt,

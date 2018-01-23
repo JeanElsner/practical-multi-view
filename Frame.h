@@ -84,8 +84,19 @@ public:
 	*/
 	Frame regionOfInterest(cv::Rect& rect);
 
+	/**
+		Count the currently tracked 3D points
+
+		@return Number of tracked points
+	**/
 	int count3DPoints();
 
+	/**
+		Get a 2D feature corresponding to the given 3D point
+
+		@param f3d A 3D feature point
+		@return 2D feature
+	**/
 	Feature get2DFeature(std::weak_ptr<Feature3D>& f3d);
 };
 #endif

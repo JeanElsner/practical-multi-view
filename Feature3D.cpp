@@ -23,15 +23,8 @@ void Feature3D::projectPoint(
 	x_p -= t[0];
 	y_p -= t[1];
 	z_p -= t[2];
-	double x_R, y_R, z_R;
-
-	x_R = R[0] * x_p + R[1] * y_p + R[2] * z_p;
-	y_R = R[3] * x_p + R[4] * y_p + R[5] * z_p;
-	z_R = R[6] * x_p + R[7] * y_p + R[8] * z_p;
-
-	x_p = x_R;
-	y_p = y_R;
-	z_p = z_R;
+	rotatePointInverse(R, x_p, y_p, z_p);
+	z_p *= -1;
 
 	double magic_z = z_p ? 1. / z_p : 1;
 
@@ -76,6 +69,19 @@ void Feature3D::rotatePoint(const double* R, double& x, double& y, double& z)
 	z = z_R;
 }
 
+void Feature3D::rotatePointInverse(const double* R, double& x, double& y, double& z)
+{
+	double x_R, y_R, z_R;
+
+	x_R = R[0] * x + R[3] * y + R[6] * z;
+	y_R = R[1] * x + R[4] * y + R[7] * z;
+	z_R = R[2] * x + R[5] * y + R[8] * z;
+
+	x = x_R;
+	y = y_R;
+	z = z_R;
+}
+
 void Feature3D::transform(const cv::Mat & R, const cv::Mat & t)
 {
 	rotate(R);
@@ -85,7 +91,7 @@ void Feature3D::transform(const cv::Mat & R, const cv::Mat & t)
 void Feature3D::transformInv(const cv::Mat& R, const cv::Mat& t)
 {
 	cv::Mat inv;
-	cv::invert(R, inv);
+	cv::transpose(R, inv);
 	translate(-t);
 	rotate(inv);
 }

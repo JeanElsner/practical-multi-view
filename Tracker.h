@@ -17,12 +17,13 @@ private:
 	double scale = 1;
 
 public:
-	int min_tracked_features = 400;
-	int tracked_features_tol = 300;
+	int min_tracked_features = 800;
+	int tracked_features_tol = 700;
 	int init_frames = 5;
 	int grid_size[2] = {255, 255};
-	int stop = 400;
-	int bundle_size = 6;
+	int stop = 600;
+	int bundle_size = 150;
+	int ba_iterations = 5;
 
 	bool verbose = true;
 	bool fancy_video = true;
@@ -49,6 +50,30 @@ public:
 	std::vector<cv::Mat> t_s, R_s;
 
 	std::vector<double> ticktock;
+
+	/**
+		Calculate rotational angle around the y axis from rotation matrix
+	**/
+	double calcYRotation(const cv::Mat& R, bool flip = false)
+	{
+		double cos = R.at<double>(0, 0);
+		double sin = R.at<double>(0, 2);
+
+		if (flip)
+		{
+			if (sin <= 0)
+				return -std::acos(cos);
+			else
+				return std::acos(cos);
+		}
+		else
+		{
+			if (sin <= 0)
+				return std::acos(cos);
+			else
+				return -std::acos(cos);
+		}
+	}
 
 	/**
 	Starts a timer, will be tiered if called multiple times
@@ -171,6 +196,15 @@ public:
 	**/
 	void bundleAdjustment();
 
+	/**
+		Draws a cross onto a cv::Mat
+
+		@param radius Radius of the cross
+		@param pos Position within the image
+		@param color Color of the cross
+		@param dst The image to draw onto
+		@param thickness Thickness of the cross
+	**/
 	void drawCross(const int radius, const cv::Point& pos, const cv::Scalar& color,  cv::Mat& dst, int thickness = 1);
 
 private:
