@@ -10,6 +10,10 @@
 #include "Feature3D.h"
 #include "ProjectionResidual.h"
 #include <ceres/ceres.h>
+#include <dlib/gui_widgets.h>
+#include <dlib/image_transforms.h>
+
+using namespace dlib;
 
 Tracker::Tracker(std::string cfg_path)
 {
@@ -77,6 +81,19 @@ void Tracker::start()
 
 		addFrame(frame);
 	}
+	std::vector<perspective_window::overlay_dot> points;
+	dlib::rand rnd;
+	for (auto& f3d : feats3d)
+	{
+		dlib::vector<double> val(f3d->getPoint().x, f3d->getPoint().y, f3d->getPoint().z);
+		rgb_pixel color = colormap_jet(10, 0, 20);
+		points.push_back(perspective_window::overlay_dot(val));
+	}
+	perspective_window win;
+	win.clear_overlay();
+	win.add_overlay(points);
+	win.set_size(512, 512);
+	win.wait_until_closed();
 }
 
 double Tracker::tock()
@@ -245,6 +262,7 @@ void Tracker::addFrame(Frame& frame)
 		std::vector<cv::Point2f> img_points;
 		cv::Mat _R_rod;
 		cv::Rodrigues(_R, _R_rod);
+		std::vector<std::weak_ptr<Feature3D>> local_feats3d;
 
 		for (auto& p : src.map)
 		{
@@ -261,10 +279,24 @@ void Tracker::addFrame(Frame& frame)
 			img_points.push_back(f.getPoint());
 
 			f3d->transform(R[j], t[j]);
+			local_feats3d.push_back(f3d);
 		}
-		cv::solvePnPRansac(obj_points, img_points, camera, cv::Mat(), _R_rod, _t, true);
+		std::vector<int> inliers;
+		cv::solvePnPRansac(obj_points, img_points, camera, cv::Mat(), _R_rod, _t, true, 100, 8, .99, inliers);
 		cv::Rodrigues(_R_rod, _R);
 		motionHeuristics(_R, _t, j);
+
+		// Removing RANSAC outliers
+		for (int i = 0; i < obj_points.size(); i++)
+		{
+			if (std::find(inliers.begin(), inliers.end(), i) == inliers.end())
+			{
+				if (local_feats3d[i].expired())
+					continue;
+				std::shared_ptr<Feature3D> f3d = local_feats3d[i].lock();
+				feats3d.erase(std::find(feats3d.begin(), feats3d.end(), f3d));
+			}
+		}
 	}
 	else
 	{
@@ -294,8 +326,11 @@ void Tracker::addFrame(Frame& frame)
 		_t = scale*_t;
 		motionHeuristics(_R, _t, j);
 
+		// Removing RANSAC outliers
 		for (int i = 0; i < tri.cols; i++)
 		{
+			if (!mask.at<char>(i))
+				continue;
 			std::shared_ptr<Feature3D> f3d_ptr = std::make_shared<Feature3D>(
 				scale*tri.at<double>(0, i) / tri.at<double>(3, i),
 				scale*tri.at<double>(1, i) / tri.at<double>(3, i),
