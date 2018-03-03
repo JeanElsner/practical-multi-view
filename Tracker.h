@@ -17,16 +17,16 @@ private:
 	double scale = 1;
 
 public:
-	int min_tracked_features = 800;
-	int tracked_features_tol = 700;
-	int init_frames = 5;
+	int min_tracked_features;
+	int tracked_features_tol;
+	int init_frames;
 	int grid_size[2] = {255, 255};
-	int stop = 600;
-	int bundle_size = 150;
-	int ba_iterations = 5;
+	int stop;
+	int bundle_size;
+	int ba_iterations;
 
-	bool verbose = true;
-	bool fancy_video = true;
+	bool verbose;
+	bool fancy_video;
 
 	std::vector<cv::String> file_names;
 	std::vector<int> timestamps;
@@ -206,6 +206,15 @@ public:
 		@param thickness Thickness of the cross
 	**/
 	void drawCross(const int radius, const cv::Point& pos, const cv::Scalar& color,  cv::Mat& dst, int thickness = 1);
+
+	/**
+		Removes the delimiters from the beginning and end of the string
+
+		@param str The string to trim
+		@param delim String containing the delimiters
+		@return trimmed string
+	**/
+	std::string trimString(std::string const& str, char const* delim = " \n\t\r");
 
 private:
 	void motionHeuristics(cv::Mat& _R, cv::Mat& _t, int j);

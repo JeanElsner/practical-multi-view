@@ -11,6 +11,47 @@
 #include "ProjectionResidual.h"
 #include <ceres/ceres.h>
 
+Tracker::Tracker(std::string cfg_path)
+{
+	extractor = new OpenCVGoodFeatureExtractor();
+	matcher = new OpenCVLucasKanadeFM();
+
+	std::ifstream cfg_file;
+	cfg_file.open(cfg_path);
+
+	if (!cfg_file) {
+		throw TrackerException("Unable to open configuration file");
+	}
+	std::string cfg_line, name, value;
+	int cfg_case = 0;
+	int div;
+	std::map<std::string, std::string> cfg;
+
+	while (std::getline(cfg_file, cfg_line)) {
+		cfg_line = trimString(cfg_line);
+
+		if (!cfg_line.length() || cfg_line[0] == '#' || cfg_line[0] == ';' || cfg_line[0] == '[')
+			continue;
+		div = cfg_line.find('=');
+		name = trimString(cfg_line.substr(0, div));
+		value = trimString(cfg_line.substr(div + 1));
+		cfg[name] = value;
+	}
+	cv::glob(cfg["image_dir"], file_names, false);
+	parseCalibration(cfg["camera_calibration"], std::stoi(cfg["camera"]));
+	parsePoses(cfg["poses"]);
+	fancy_video = std::stoi(cfg["fancy_video"]);
+	verbose = std::stoi(cfg["verbose"]);
+	min_tracked_features = std::stoi(cfg["min_tracked_features"]);
+	tracked_features_tol = std::stoi(cfg["tracked_features_tol"]);
+	init_frames = std::stoi(cfg["init_frames"]);
+	stop = std::stoi(cfg["frames"]);
+	bundle_size = std::stoi(cfg["bundle_size"]);
+	ba_iterations = std::stoi(cfg["max_iterations"]);
+
+	cfg_file.close();
+}
+
 void Tracker::start()
 {
 	for (int i = 0; i < init_frames; i++)
@@ -460,50 +501,20 @@ void Tracker::initialise()
 		" features from frame #" << init_offset << std::endl;
 }
 
-Tracker::Tracker(std::string cfg)
+std::string Tracker::trimString(std::string const& str, char const* delim)
 {
-	extractor = new OpenCVGoodFeatureExtractor();
-	matcher = new OpenCVLucasKanadeFM();
+	std::string dest(str);
+	std::string::size_type index = dest.find_first_not_of(delim);
 
-	std::ifstream cfg_file;
-	cfg_file.open(cfg);
+	if (index != std::string::npos)
+		dest.erase(0, index);
+	else
+		dest.erase();
+	index = dest.find_last_not_of(delim);
 
-	if (!cfg_file) {
-		throw TrackerException("Unable to open configuration file");
-	}
-	std::string cfg_line;
-	int cfg_case = 0;
-
-	std::string img_path, timestamp_path;
-	int num_calib = 0;
-	std::stringstream s_calib;
-
-	while (std::getline(cfg_file, cfg_line)) {
-
-		switch (cfg_case)
-		{
-			// Image file path
-		case 0:
-			cv::glob(cfg_line, file_names, false);
-			break;
-			// Camera identifier
-		case 1:
-			s_calib = std::stringstream(cfg_line);
-			s_calib >> num_calib;
-			break;
-			// KITTI calibration file path
-		case 2:
-			parseCalibration(cfg_line, num_calib);
-			break;
-		case 3:
-			// KITTI ground truth
-			parsePoses(cfg_line);
-			break;
-		}
-
-		cfg_case++;
-	}
-	cfg_file.close();
+	if (index != std::string::npos)
+		dest.erase(++index);
+	return dest;
 }
 
 std::vector<std::string> Tracker::split(const std::string& str, const std::string& delim)
