@@ -24,6 +24,8 @@ private:
 public:
 	std::unordered_map<Feature, std::weak_ptr<Feature3D>, Feature::Hasher> map;
 
+	std::unordered_map < Feature, Feature, Feature::Hasher> feat_corr;
+
 	// Original image and black and white version
 	cv::Mat orig, bw;
 

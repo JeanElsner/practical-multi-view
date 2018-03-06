@@ -20,6 +20,8 @@ BaseFeatureMatcher::fmap OpenCVLucasKanadeFM::matchFeatures(Frame & src, Frame &
 
 	for (auto const& p : src.map)
 	{
+		if (status.size() < i + 1)
+			continue;
 		if (status[i])
 		{
 			Feature f = Feature(next_points[i].x, next_points[i].y);

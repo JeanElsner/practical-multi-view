@@ -7,8 +7,12 @@
 #include <vector>
 #include <exception>
 #include <memory>
+#include <dlib/threads.h>
+#include <dlib/pipe.h>
 
-class Tracker
+#define GLOG_NO_ABBREVIATED_SEVERITIES
+
+class Tracker : private dlib::multithreaded_object
 {
 private:
 	bool init = false;
@@ -51,8 +55,27 @@ public:
 
 	std::vector<double> ticktock;
 
+	std::string video_path;
+
+	/**
+		//TODO
+	**/
+
+	void estimatePose(Frame& src, Frame& next);
+	/**
+		Calculate the median of a vector of doubles
+
+		@param v Vector of doubles
+		@return The median
+	**/
+	double median(std::vector<double> &v);
+
 	/**
 		Calculate rotational angle around the y axis from rotation matrix
+
+		@param R Rotation matrix between two poses
+		@param flip Flip the sign of the z axis
+		@return Rotation along the y axis
 	**/
 	double calcYRotation(const cv::Mat& R, bool flip = false)
 	{
@@ -114,7 +137,7 @@ public:
 	*/
 	Tracker(std::string cfg);
 
-	Tracker() {};
+	Tracker() : job_pipe(605) {};
 
 	/**
 		Adds a frame to the tracker extracting new
@@ -176,25 +199,25 @@ public:
 	/**
 		Start the visual odometry process
 	*/
-	void start();
+	void startPipeline();
 
 	/**
 		Draws a top down view of the calculated trajectory and
 		features as well as the ground truth
 	**/
-	void drawMap();
+	void drawMap(Frame& fr);
 
 	/**
 		Returns the last frame added to the tracker
 
 		@return Frame reference
 	**/
-	Frame* currentFrame() { return &frames[frames.size() - 1]; }
+	Frame* currentFramex() { return &frames[frames.size() - 1]; }
 
 	/**
-		Performs bundle adjustment of the last  bundle_size frames
+		Performs bundle adjustment of the last bundle_size frames
 	**/
-	void bundleAdjustment();
+	void bundleAdjustment(Frame& f);
 
 	/**
 		Draws a cross onto a cv::Mat
@@ -218,5 +241,18 @@ public:
 
 private:
 	void motionHeuristics(cv::Mat& _R, cv::Mat& _t, int j);
+
+	void featureExtractionThread();
+
+	void poseEstimationThread();
+
+	struct Job
+	{
+		int frame;
+		std::vector<Frame> frames;
+	};
+
+	dlib::pipe<Job> job_pipe;
+
 };
 #endif

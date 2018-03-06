@@ -313,26 +313,25 @@ int main(int argc, char** argv)
 {
 	if (argc < 2)
 		return -1;
-	Tracker tracker;
+	
 	try
 	{
-		tracker = Tracker(argv[1]);
+		Tracker tracker(argv[1]);
+		tracker.startPipeline();
+
+		VideoWriter video;
+		video = VideoWriter(tracker.video_path, CV_FOURCC('M', 'J', 'P', 'G'), 10, tracker.frames[0].orig.size());
+
+		for (auto& f : tracker.frames)
+		{
+			video.write(f.orig);
+		}
+		video.release();
 	}
 	catch (Tracker::TrackerException &e)
 	{
 		std::cerr << e.what() << std::endl << "Tracker configuration failed";
 		return -1;
 	}
-	tracker.start();
-
-	VideoWriter video;
-	video = VideoWriter("../../../tracker.avi", CV_FOURCC('M', 'J', 'P', 'G'), 10, tracker.frames[0].orig.size());
-
-	for (auto& f : tracker.frames)
-	{
-		video.write(f.orig);
-	}
-	video.release();
-	
 	return 0;
 }

@@ -12,10 +12,12 @@
 #include <ceres/ceres.h>
 #include <dlib/gui_widgets.h>
 #include <dlib/image_transforms.h>
+#include <dlib/misc_api.h>
 
-using namespace dlib;
+dlib::mutex frame_mutex;
+dlib::signaler frame_signaler(frame_mutex);
 
-Tracker::Tracker(std::string cfg_path)
+Tracker::Tracker(std::string cfg_path) : job_pipe(605)
 {
 	extractor = new OpenCVGoodFeatureExtractor();
 	matcher = new OpenCVLucasKanadeFM();
@@ -52,48 +54,18 @@ Tracker::Tracker(std::string cfg_path)
 	stop = std::stoi(cfg["frames"]);
 	bundle_size = std::stoi(cfg["bundle_size"]);
 	ba_iterations = std::stoi(cfg["max_iterations"]);
+	video_path = cfg["video_path"];
 
 	cfg_file.close();
 }
 
-void Tracker::start()
+double Tracker::median(std::vector<double> &v)
 {
-	for (int i = 0; i < init_frames; i++)
-	{
-		frames.push_back(Frame(file_names[i]));
-	}
-	initialise();
-	cv::Mat _R = ((cv::Mat_<double>(3, 3)) << 1, 0, 0, 0, 1, 0, 0, 0, 1);
-	cv::Mat _t = ((cv::Mat_<double>(3, 1)) << 0, 0, 0);
-	R.push_back(_R);
-	t.push_back(_t);
-	R_s.push_back(_R);
-	t_s.push_back(_t);
-
-	for (int i = init_offset + 1; i < file_names.size(); i++)
-	{
-		if (i >= stop)
-			break;
-		Frame frame(file_names[i]);
-
-		if (frame.isEmpty())
-			continue;
-
-		addFrame(frame);
-	}
-	std::vector<perspective_window::overlay_dot> points;
-	dlib::rand rnd;
-	for (auto& f3d : feats3d)
-	{
-		dlib::vector<double> val(f3d->getPoint().x, f3d->getPoint().y, f3d->getPoint().z);
-		rgb_pixel color = colormap_jet(10, 0, 20);
-		points.push_back(perspective_window::overlay_dot(val));
-	}
-	perspective_window win;
-	win.clear_overlay();
-	win.add_overlay(points);
-	win.set_size(512, 512);
-	win.wait_until_closed();
+	size_t n = v.size() / 2;
+	std::nth_element(v.begin(), v.begin() + n, v.end());
+	if (!n)
+		return 0;
+	return v[n];
 }
 
 double Tracker::tock()
@@ -116,16 +88,13 @@ void Tracker::drawCross(const int radius, const cv::Point& pos, const cv::Scalar
 	cv::line(dst, a1, a2, color, thickness);
 }
 
-void Tracker::drawMap()
+void Tracker::drawMap(Frame& fr)
 {
 	int j = t.size() - 1;
-	int k = frames.size() - 1;
 	map = cv::Mat::zeros(512, 512, CV_8UC3);
 
-	Frame* fr = currentFrame();
-
 	// Drawing 3D feature points
-	for (auto& p : fr->map)
+	for (auto& p : fr.map)
 	{
 		if (p.second.expired())
 			continue;
@@ -134,14 +103,14 @@ void Tracker::drawMap()
 
 		cv::Scalar color;
 
-		if (f->column > fr->orig.cols / 2)
+		if (f->column > fr.orig.cols / 2)
 			color = cv::Scalar(255, 0, 255);
 		else
 			color = cv::Scalar(255, 255, 0);
 
 		//cv::circle(fr->orig, cv::Point(f->column, f->row), 3, color, .5);
 
-		drawCross(3, cv::Point(f->column, f->row), color, fr->orig, 1);
+		drawCross(3, cv::Point(f->column, f->row), color, fr.orig, 1);
 
 		cv::circle(map, cv::Point(map.cols / 2 + f3d->getPoint().x, map.rows / 1.2 + f3d->getPoint().z), 1, color, -1);
 
@@ -233,29 +202,147 @@ void Tracker::motionHeuristics(cv::Mat& _R, cv::Mat& _t, int j)
 	R.push_back(_R);
 }
 
+void Tracker::featureExtractionThread()
+{
+	for (int i = init_offset + 1; i < file_names.size(); i++)
+	{
+		if (i >= stop)
+			break;
+		Frame frame(file_names[i]);
+
+		if (frame.isEmpty())
+			continue;
+		addFrame(frame);
+
+		dlib::auto_mutex locker(frame_mutex);
+		if (frame.frame < 1)
+			continue;
+		Job j;
+		j.frame = frame.frame-1;
+		locker.unlock();
+		job_pipe.enqueue(j);
+	}
+	job_pipe.wait_until_empty();
+	job_pipe.disable();
+}
+
+void Tracker::poseEstimationThread()
+{
+	Job j;
+	while (job_pipe.dequeue(j))
+	{
+		dlib::auto_mutex locker(frame_mutex);
+		Frame src = frames[j.frame];
+		Frame next = frames[j.frame + 1];
+		locker.unlock();
+		estimatePose(src, next);
+	}
+}
+
+void Tracker::startPipeline()
+{
+	for (int i = 0; i < init_frames; i++)
+	{
+		frames.push_back(Frame(file_names[i]));
+	}
+	initialise();
+	cv::Mat _R = ((cv::Mat_<double>(3, 3)) << 1, 0, 0, 0, 1, 0, 0, 0, 1);
+	cv::Mat _t = ((cv::Mat_<double>(3, 1)) << 0, 0, 0);
+	R.push_back(_R);
+	t.push_back(_t);
+	R_s.push_back(_R);
+	t_s.push_back(_t);
+
+	register_thread(*this, &Tracker::featureExtractionThread);
+	register_thread(*this, &Tracker::poseEstimationThread);
+	start();
+	wait();
+
+	// Display 3d point cloud
+	std::vector<dlib::perspective_window::overlay_dot> points;
+	dlib::rand rnd;
+
+	std::vector<double> x, y, z;
+	for (auto& f3d : feats3d)
+	{
+		x.push_back(f3d->getPoint().x);
+		y.push_back(f3d->getPoint().y);
+		z.push_back(f3d->getPoint().z);
+	}
+	double med_x = median(x), med_y = median(y), med_z = median(z);
+
+	for (auto& f3d : feats3d)
+	{
+		// Skimming far-away points so camera doesn't zoom out as much
+		if (std::abs(f3d->getPoint().x) > 4 * std::abs(med_x) ||
+			std::abs(f3d->getPoint().y) > 4 * std::abs(med_y) ||
+			std::abs(f3d->getPoint().z) > 4 * std::abs(med_z))
+			continue;
+		dlib::vector<double> val(f3d->getPoint().x, f3d->getPoint().y, f3d->getPoint().z);
+		points.push_back(dlib::perspective_window::overlay_dot(val));
+	}
+	dlib::perspective_window win;
+	win.clear_overlay();
+	win.add_overlay(points);
+	win.set_size(512, 512);
+	win.set_title("3D point cloud");
+	win.wait_until_closed();
+}
+
 void Tracker::addFrame(Frame& frame)
 {
 	frame.frame = frames.size();
-	frames.push_back(frame);
-
-	if (verbose)
-		std::cout << "--- Frame #" << frame.frame << " ---" << std::endl;
-
-	Frame& src = frames[frames.size() - 2];
-	Frame& next = frames[frames.size() - 1];
-	std::vector<Feature> new_feats;
-
+	dlib::auto_mutex locker(frame_mutex);
 	tick();
-	BaseFeatureMatcher::fmap feat_corr =  matcher->matchFeatures(src, next);
+	BaseFeatureMatcher::fmap feat_corr = matcher->matchFeatures(frames[frame.frame-1], frame);
+	frames[frame.frame - 1].feat_corr = feat_corr;
+	locker.unlock();
 
 	if (verbose)
-		std::cout << tock() << " seconds for feature matching ";
+		std::cout << tock() << " seconds for feature matching in frame #" << frame.frame << std::endl;
+	tick();
+
+	if (feat_corr.size() < tracked_features_tol)
+	{
+		if (verbose)
+			std::cout << "Trying to find " << min_tracked_features << " new features" <<
+			" in frame #" << (frames.size() - 1) << std::endl;
+		dlib::auto_mutex locker2(frame_mutex);
+		std::vector<GridSection> roi = getGridROI(frames[frames.size() - 1]);
+		locker2.unlock();
+		int n_grid = std::ceil((double)min_tracked_features / (double)roi.size());
+
+		for (auto& r : roi)
+		{
+			std::vector<Feature> new_feats = extractor->extractFeatures(r.frame, n_grid);
+
+			for (auto& f : new_feats)
+			{
+				//if (!f.hasNeighbor(currentFrame()))
+				{
+					f.column = r.x*grid_size[1] + f.column;
+					f.row = r.y*grid_size[0] + f.row;
+					frame.map[f] = std::weak_ptr<Feature3D>();
+				}
+			}
+		}
+		if (verbose)
+			std::cout << "Feature extraction took " << tock() << " seconds" << std::endl;
+	}
+	dlib::auto_mutex locker3(frame_mutex);
+	frames.push_back(frame);
+}
+
+void Tracker::estimatePose(Frame& src, Frame&next)
+{
+	if (verbose)
+		std::cout << "--- Frame #" << src.frame << " ---" << std::endl;
 
 	tick();
 
 	int j = t.size() - 1;
 	cv::Mat _R = R[j].clone(), _t = t[j].clone(), mask, tri;
-
+	std::cout << src.count3DPoints() << std::endl;
 	if (src.count3DPoints() >= tracked_features_tol)
 	{
 		std::vector<cv::Point3f> obj_points;
@@ -269,7 +356,8 @@ void Tracker::addFrame(Frame& frame)
 			if (p.second.expired())
 				continue;
 			std::shared_ptr<Feature3D> f3d = p.second.lock();
-			Feature f = next.get2DFeature(p.second);
+			Feature f = src.feat_corr[p.first];
+			next.map[f] = std::weak_ptr<Feature3D>(f3d);
 			f3d->transformInv(R[j], t[j]);
 
 			cv::Point3f p3f = f3d->getPoint();
@@ -304,7 +392,7 @@ void Tracker::addFrame(Frame& frame)
 
 		std::vector<cv::Point> p1, p2;
 
-		for (auto& p : feat_corr)
+		for (auto& p : src.feat_corr)
 		{
 			Feature f = p.first;
 			p1.push_back(f.getPoint());
@@ -346,61 +434,39 @@ void Tracker::addFrame(Frame& frame)
 		}
 		init3d = true;
 	}
+	dlib::auto_mutex locker(frame_mutex);
+	frames[src.frame] = src;
+	frames[next.frame] = next;
+	locker.unlock();
 
 	if (verbose)
 		std::cout << tock() << " seconds for pose estimation " << std::endl;
 
-	if (bundle_size && currentFrame()->frame % (bundle_size / 3 * 2) == 0)
-		bundleAdjustment();
-	drawMap();
-
-	int n3d = currentFrame()->count3DPoints();
-
-	if (n3d < tracked_features_tol)
+	if (bundle_size && src.frame % (bundle_size / 3 * 2) == 0)
 	{
-		int n = min_tracked_features - n3d;
-		tick();
-		if (verbose)
-			std::cout << "Trying to find " << n << " new features" << 
-			" in frame #" << (frames.size() - 1) << std::endl;
-
-		std::vector<GridSection> roi = getGridROI(frames[frames.size() - 1]);
-		int n_grid = std::ceil((double)n / (double)roi.size());
-
-		for (auto& r : roi)
-		{
-			std::vector<Feature> new_feats = extractor->extractFeatures(r.frame, n_grid);
-
-			for (auto& f : new_feats)
-			{
-				//if (!f.hasNeighbor(currentFrame()))
-				{
-					f.column = r.x*grid_size[1] + f.column;
-					f.row = r.y*grid_size[0] + f.row;
-					currentFrame()->map[f] = std::weak_ptr<Feature3D>();
-				}
-			}
-		}
-		if (verbose)
-			std::cout << "Feature extraction took " << tock() << " seconds" << std::endl;
+		dlib::auto_mutex locker_ba(frame_mutex);
+		bundleAdjustment(next);
+		locker_ba.unlock();
 	}
+	drawMap(src);
 
 	if (fancy_video)
 	{
-		cv::Mat roi = frame.orig(cv::Rect(0, frame.orig.rows - frame.orig.rows, frame.orig.rows, frame.orig.rows));
-		cv::Mat colour = cv::Mat::zeros(roi.size(), frame.orig.type());
+		cv::Mat roi = src.orig(cv::Rect(0, src.orig.rows - src.orig.rows, src.orig.rows, src.orig.rows));
+		cv::Mat colour = cv::Mat::zeros(roi.size(), src.orig.type());
 		cv::resize(map, colour, colour.size());
 		double alpha = 0.75;
 		cv::addWeighted(colour, alpha, roi, 1.0 - alpha, 0.0, roi);
 	}
 	cv::imshow("map", map);
-	cv::imshow("test", currentFrame()->orig);
+	cv::imshow("test", src.orig);
 	cv::waitKey(10);
 }
 
-void Tracker::bundleAdjustment()
+void Tracker::bundleAdjustment(Frame& f)
 {
-	int n = std::min(bundle_size, (int)frames.size());
+	int fn = (int)f.frame + 1;
+	int n = std::min(bundle_size, fn);
 
 	double _camera[] = {
 		camera.at<double>(0, 0), camera.at<double>(0, 1), camera.at<double>(0, 2),
@@ -412,7 +478,7 @@ void Tracker::bundleAdjustment()
 	std::map<int, double*> tr_opt, p2d, R_inv, t_inv;
 	std::unordered_map<std::shared_ptr<Feature3D>, double*> p3d_opt;
 	
-	for (int i = frames.size() - n; i < frames.size(); i++)
+	for (int i = fn - n; i < fn; i++)
 	{
 		Frame* frame = &frames[i];
 
@@ -456,7 +522,7 @@ void Tracker::bundleAdjustment()
 	ceres::Solve(options, &problem, &summary);
 	std::cout << summary.FullReport() << "\n";
 	
-	for (int i = frames.size() - n; i < frames.size(); i++)
+	for (int i = fn - n; i < fn; i++)
 	{
 		if (i == 0)
 			continue;
