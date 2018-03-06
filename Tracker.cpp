@@ -14,6 +14,9 @@
 #include <dlib/image_transforms.h>
 #include <dlib/misc_api.h>
 
+#include "kNNFeatureMatcher.h"
+#include "ShiTomasiFeatureExtractor.h"
+
 dlib::mutex frame_mutex;
 dlib::signaler frame_signaler(frame_mutex);
 
@@ -318,7 +321,7 @@ void Tracker::addFrame(Frame& frame)
 
 			for (auto& f : new_feats)
 			{
-				//if (!f.hasNeighbor(currentFrame()))
+				if (!frame.hasNeighbor(f))
 				{
 					f.column = r.x*grid_size[1] + f.column;
 					f.row = r.y*grid_size[0] + f.row;

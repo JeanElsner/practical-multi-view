@@ -14,17 +14,6 @@ float Feature::distance(const Feature& f)
 	return x > y ? x : y;
 }
 
-/*bool Feature::hasNeighbor(Frame* frame, int dist)
-{
-	for (auto& p : frame->map)
-	{
-		//if (abs(f.row - row) < distance && abs(f.column - column) < distance)
-		if (distance(p.first) < dist)
-			return true;
-	}
-	return false;
-}*/
-
 void Feature::scale(float scale)
 {
 	column = (int)((float)column*scale);

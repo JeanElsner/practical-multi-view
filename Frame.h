@@ -100,5 +100,15 @@ public:
 		@return 2D feature
 	**/
 	Feature get2DFeature(std::weak_ptr<Feature3D>& f3d);
+
+	/**
+		Checks whether a feature has any neighbors within
+		a given (Manhattan) distance.
+
+		@param f Feature to check
+		@param dist The distance in pixels
+		@return True if a neighbor was found, false otherwise
+	**/
+	bool hasNeighbor(Feature f, int dist = 5);
 };
 #endif

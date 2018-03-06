@@ -53,16 +53,6 @@ public:
 	*/
 	float distance(const Feature& f);
 
-	/**
-		Checks whether this feature has any neighbors within
-		a given (Manhattan) distance.
-
-		@param feats A list of features to check against
-		@param dist The distance in pixels
-		@return True if a neigihbor was found, false otherwise
-	*/
-	//bool hasNeighbor(Frame* frame, int dist = 5);
-
 	friend bool operator== (const Feature& lhs, const Feature& rhs);
 	friend bool operator!= (const Feature& lhs, const Feature& rhs);
 	friend bool operator>(const Feature& lhs, const Feature& rhs);

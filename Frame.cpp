@@ -1,5 +1,16 @@
 #include "Frame.h"
 
+bool Frame::hasNeighbor(Feature f, int dist)
+{
+	for (auto& p : map)
+	{
+		//if (abs(f.row - row) < distance && abs(f.column - column) < distance)
+		if (f.distance(p.first) < dist)
+		return true;
+	}
+	return false;
+}
+
 Feature Frame::get2DFeature(std::weak_ptr<Feature3D>& f3d)
 {
 	for (auto& p : map)
