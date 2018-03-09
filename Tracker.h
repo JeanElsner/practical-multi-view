@@ -4,6 +4,9 @@
 #include "Frame.h"
 #include "BaseFeatureExtractor.h"
 #include "BaseFeatureMatcher.h"
+#include "BaseTriangulator.h"
+#include "BasePnPSolver.h"
+#include "BaseOptimizer.h"
 #include <vector>
 #include <exception>
 #include <memory>
@@ -17,10 +20,10 @@ class Tracker : private dlib::multithreaded_object
 private:
 	bool init = false;
 	bool init3d = false;
-	int init_offset = 0;
-	double scale = 1;
 
 public:
+	double scale = 1;
+	int init_offset = 0;
 	int min_tracked_features;
 	int tracked_features_tol;
 	int init_frames;
@@ -48,6 +51,9 @@ public:
 
 	BaseFeatureExtractor* extractor;
 	BaseFeatureMatcher* matcher;
+	BasePnPSolver* pnpsolver;
+	BaseTriangulator* triangulator;
+	BaseOptimizer* ba;
 
 	std::vector<cv::Mat> t, R, gt_t, gt_R;
 

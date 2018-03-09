@@ -2,6 +2,9 @@
 #include "OpenCVFASTFeatureExtractor.h"
 #include "OpenCVLucasKanadeFM.h"
 #include "OpenCVGoodFeatureExtractor.h"
+#include "OpenCVEPnPSolver.h"
+#include "OpenCVFivePointTri.h"
+#include "CeresBundleAdjustment.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -22,9 +25,6 @@ dlib::signaler frame_signaler(frame_mutex);
 
 Tracker::Tracker(std::string cfg_path) : job_pipe(605)
 {
-	extractor = new OpenCVGoodFeatureExtractor();
-	matcher = new OpenCVLucasKanadeFM();
-
 	std::ifstream cfg_file;
 	cfg_file.open(cfg_path);
 
@@ -46,9 +46,6 @@ Tracker::Tracker(std::string cfg_path) : job_pipe(605)
 		value = trimString(cfg_line.substr(div + 1));
 		cfg[name] = value;
 	}
-	cv::glob(cfg["image_dir"], file_names, false);
-	parseCalibration(cfg["camera_calibration"], std::stoi(cfg["camera"]));
-	parsePoses(cfg["poses"]);
 	fancy_video = std::stoi(cfg["fancy_video"]);
 	verbose = std::stoi(cfg["verbose"]);
 	min_tracked_features = std::stoi(cfg["min_tracked_features"]);
@@ -59,7 +56,17 @@ Tracker::Tracker(std::string cfg_path) : job_pipe(605)
 	ba_iterations = std::stoi(cfg["max_iterations"]);
 	video_path = cfg["video_path"];
 
+	cv::glob(cfg["image_dir"], file_names, false);
+	parseCalibration(cfg["camera_calibration"], std::stoi(cfg["camera"]));
+	parsePoses(cfg["poses"]);
+
 	cfg_file.close();
+
+	extractor = new OpenCVGoodFeatureExtractor();
+	matcher = new OpenCVLucasKanadeFM();
+	pnpsolver = new OpenCVEPnPSolver(this);
+	triangulator = new OpenCVFivePointTri(this);
+	ba = new CeresBundleAdjustment(this);
 }
 
 double Tracker::median(std::vector<double> &v)
@@ -111,19 +118,10 @@ void Tracker::drawMap(Frame& fr)
 		else
 			color = cv::Scalar(255, 255, 0);
 
-		//cv::circle(fr->orig, cv::Point(f->column, f->row), 3, color, .5);
-
 		drawCross(3, cv::Point(f->column, f->row), color, fr.orig, 1);
 
 		cv::circle(map, cv::Point(map.cols / 2 + f3d->getPoint().x, map.rows / 1.2 + f3d->getPoint().z), 1, color, -1);
-
-		//drawCross(3, cv::Point(map.cols / 2 + f3d->getPoint().x, map.rows / 2 + f3d->getPoint().z), color, map, 1);
 	}
-
-	/*for (auto& f3d : feats3d)
-	{
-		cv::circle(map, cv::Point(map.cols / 2 + f3d->getPoint().x, map.rows / 2 + f3d->getPoint().z), .5, cv::Scalar(255, 255, 255), -1);
-	}*/
 
 	// Drawing rectangle representing position and orientation
 
@@ -338,117 +336,39 @@ void Tracker::addFrame(Frame& frame)
 
 void Tracker::estimatePose(Frame& src, Frame&next)
 {
-	if (verbose)
-		std::cout << "--- Frame #" << src.frame << " ---" << std::endl;
-
 	tick();
+	int j = src.frame;
+	cv::Mat _R = R[j].clone(), _t = t[j].clone();
 
-	int j = t.size() - 1;
-	cv::Mat _R = R[j].clone(), _t = t[j].clone(), mask, tri;
-	std::cout << src.count3DPoints() << std::endl;
 	if (src.count3DPoints() >= tracked_features_tol)
 	{
-		std::vector<cv::Point3f> obj_points;
-		std::vector<cv::Point2f> img_points;
-		cv::Mat _R_rod;
-		cv::Rodrigues(_R, _R_rod);
-		std::vector<std::weak_ptr<Feature3D>> local_feats3d;
-
-		for (auto& p : src.map)
-		{
-			if (p.second.expired())
-				continue;
-			std::shared_ptr<Feature3D> f3d = p.second.lock();
-			Feature f = src.feat_corr[p.first];
-			next.map[f] = std::weak_ptr<Feature3D>(f3d);
-			f3d->transformInv(R[j], t[j]);
-
-			cv::Point3f p3f = f3d->getPoint();
-			p3f.z *= -1;
-
-			obj_points.push_back(p3f);
-			img_points.push_back(f.getPoint());
-
-			f3d->transform(R[j], t[j]);
-			local_feats3d.push_back(f3d);
-		}
-		std::vector<int> inliers;
-		cv::solvePnPRansac(obj_points, img_points, camera, cv::Mat(), _R_rod, _t, true, 100, 8, .99, inliers);
-		cv::Rodrigues(_R_rod, _R);
-		motionHeuristics(_R, _t, j);
-
-		// Removing RANSAC outliers
-		for (int i = 0; i < obj_points.size(); i++)
-		{
-			if (std::find(inliers.begin(), inliers.end(), i) == inliers.end())
-			{
-				if (local_feats3d[i].expired())
-					continue;
-				std::shared_ptr<Feature3D> f3d = local_feats3d[i].lock();
-				feats3d.erase(std::find(feats3d.begin(), feats3d.end(), f3d));
-			}
-		}
+		pnpsolver->solvePnP(src, next, _R, _t);
+		
 	}
 	else
 	{
 		tick();
-
-		std::vector<cv::Point> p1, p2;
-
-		for (auto& p : src.feat_corr)
-		{
-			Feature f = p.first;
-			p1.push_back(f.getPoint());
-			p2.push_back(p.second.getPoint());
-		}
-		cv::Mat E = cv::findEssentialMat(p1, p2, camera, cv::RANSAC, 0.99, 1, mask);
+		triangulator->triangulate(src, next, _R, _t);
+		init3d = true;
 
 		if (verbose)
-			std::cout << tock() << " seconds for finding E ";
+			std::cout << tock() << " seconds for triangulating points." << std::endl;
 		tick();
-		cv::recoverPose(E, p1, p2, camera, _R, _t, HUGE_VAL, mask, tri);
-
-		cv::Mat dist = gt_t[j+init_offset+1] - gt_t[j+init_offset];
-		scale = std::sqrt(
-			std::pow(dist.at<double>(0), 2) +
-			std::pow(dist.at<double>(1), 2) +
-			std::pow(dist.at<double>(2), 2));
-
-		_t = scale*_t;
-		motionHeuristics(_R, _t, j);
-
-		// Removing RANSAC outliers
-		for (int i = 0; i < tri.cols; i++)
-		{
-			if (!mask.at<char>(i))
-				continue;
-			std::shared_ptr<Feature3D> f3d_ptr = std::make_shared<Feature3D>(
-				scale*tri.at<double>(0, i) / tri.at<double>(3, i),
-				scale*tri.at<double>(1, i) / tri.at<double>(3, i),
-				scale*tri.at<double>(2, i) / tri.at<double>(3, i) * -1);
-
-			if (f3d_ptr->getPoint().z < 0)
-			{
-				f3d_ptr->transform(R[j], t[j]);
-				feats3d.push_back(f3d_ptr);
-				next.map[Feature(p2[i].x, p2[i].y)] = std::weak_ptr<Feature3D>(f3d_ptr);
-				src.map[Feature(p1[i].x, p1[i].y)] = std::weak_ptr<Feature3D>(f3d_ptr);
-			}
-		}
-		init3d = true;
 	}
+	motionHeuristics(_R, _t, j);
+
 	dlib::auto_mutex locker(frame_mutex);
 	frames[src.frame] = src;
 	frames[next.frame] = next;
 	locker.unlock();
 
 	if (verbose)
-		std::cout << tock() << " seconds for pose estimation " << std::endl;
+		std::cout << tock() << " seconds for pose estimation in frame #" << src.frame << std::endl;
 
-	if (bundle_size && src.frame % (bundle_size / 3 * 2) == 0)
+	if (bundle_size && src.frame && src.frame % (bundle_size / 3 * 2) == 0)
 	{
 		dlib::auto_mutex locker_ba(frame_mutex);
-		bundleAdjustment(next);
+		ba->apply(next);
 		locker_ba.unlock();
 	}
 	drawMap(src);
@@ -523,8 +443,11 @@ void Tracker::bundleAdjustment(Frame& f)
 	options.max_num_iterations = ba_iterations;
 	ceres::Solver::Summary summary;
 	ceres::Solve(options, &problem, &summary);
-	std::cout << summary.FullReport() << "\n";
+
+	if (verbose)
+		std::cout << summary.FullReport() << "\n";
 	
+	// Updating 3D points and camera poses
 	for (int i = fn - n; i < fn; i++)
 	{
 		if (i == 0)
@@ -624,6 +547,7 @@ std::string Tracker::trimString(std::string const& str, char const* delim)
 std::vector<std::string> Tracker::split(const std::string& str, const std::string& delim)
 {
 	std::vector<std::string> tokens;
+
 	std::size_t prev = 0, pos = 0;
 	do
 	{
@@ -655,9 +579,11 @@ void Tracker::parsePoses(std::string filename)
 		throw TrackerException("Unable to open pose file");
 	}
 	std::string pose;
+	int k = 0;
 
-	while (std::getline(f_poses, pose))
+	while (std::getline(f_poses, pose) && k < stop)
 	{
+		k++;
 		std::vector<std::string> s_pose = split(pose);
 		int i = 0;
 		cv::Mat_<double> _R(3, 3);
