@@ -4,17 +4,17 @@ This is an implementation for the practical course *Multi-Camera Computer Vision
 Watch the pipeline run on the KITTI benchmark on [Youtube](https://www.youtube.com/watch?v=9_oE1G4kKxU)
 ## Requirements
 
-* OpenCV
+* OpenCV 3.3 or later
 
-* Ceres
+* Ceres 1.13 or later
 
-* Dlib
+* Dlib 19.9 or later
 ## Build
 ```
 mkdir build
 cdir build
 cmake ..
-make
+cmake --build .
 ```
 ## Configuration
 Run binary with path to configuration file as argument. The configuration may look like this:
