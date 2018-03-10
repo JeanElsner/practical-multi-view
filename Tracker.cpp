@@ -28,15 +28,16 @@ Tracker::Tracker(std::string cfg_path) : job_pipe(605)
 	std::ifstream cfg_file;
 	cfg_file.open(cfg_path);
 
-	if (!cfg_file) {
+	if (!cfg_file)
 		throw TrackerException("Unable to open configuration file");
-	}
+
 	std::string cfg_line, name, value;
 	int cfg_case = 0;
 	int div;
 	std::map<std::string, std::string> cfg;
 
-	while (std::getline(cfg_file, cfg_line)) {
+	while (std::getline(cfg_file, cfg_line))
+	{
 		cfg_line = trimString(cfg_line);
 
 		if (!cfg_line.length() || cfg_line[0] == '#' || cfg_line[0] == ';' || cfg_line[0] == '[')
@@ -386,92 +387,6 @@ void Tracker::estimatePose(Frame& src, Frame&next)
 	cv::waitKey(10);
 }
 
-void Tracker::bundleAdjustment(Frame& f)
-{
-	int fn = (int)f.frame + 1;
-	int n = std::min(bundle_size, fn);
-
-	double _camera[] = {
-		camera.at<double>(0, 0), camera.at<double>(0, 1), camera.at<double>(0, 2),
-		camera.at<double>(1, 0), camera.at<double>(1, 1), camera.at<double>(1, 2),
-		camera.at<double>(2, 0), camera.at<double>(2, 1), camera.at<double>(2, 2)
-	};
-	ceres::Problem problem;
-
-	std::map<int, double*> tr_opt, p2d, R_inv, t_inv;
-	std::unordered_map<std::shared_ptr<Feature3D>, double*> p3d_opt;
-	
-	for (int i = fn - n; i < fn; i++)
-	{
-		Frame* frame = &frames[i];
-
-		cv::Mat rod = cv::Mat_<double>(3, 1);
-		cv::Mat R_transpose = cv::Mat_<double>(3, 3);
-		cv::transpose(R[i], R_transpose);
-		cv::Rodrigues(R_transpose, rod);
-
-		tr_opt[i] = new double[6]{
-			rod.at<double>(0), rod.at<double>(1), rod.at<double>(2),
-			-t[i].at<double>(0), -t[i].at<double>(1), -t[i].at<double>(2)
-		};
-
-		if (i == 0)
-			continue;
-
-		for (auto& p : frame->map)
-		{
-			if (p.second.expired())
-				continue;
-			std::shared_ptr<Feature3D> f3d = p.second.lock();
-			Feature f = p.first;
-
-			cv::Point3f p3f = f3d->getPoint();
-			
-			p2d[i] = new double[2] { (double)f.column, (double)f.row };
-
-			if (!p3d_opt.count(f3d))
-				p3d_opt[f3d] = new double[3]{ p3f.x, p3f.y, p3f.z };
-
-			ceres::CostFunction* cost_function = ProjectionResidual::Create(p2d[i], _camera);
-			problem.AddResidualBlock(cost_function, new ceres::HuberLoss(1.0), tr_opt[i], p3d_opt[f3d]);
-		}
-	}
-	ceres::Solver::Options options;
-	options.linear_solver_type = ceres::SPARSE_SCHUR;
-	options.minimizer_progress_to_stdout = true;
-	options.num_threads = 4;
-	options.max_num_iterations = ba_iterations;
-	ceres::Solver::Summary summary;
-	ceres::Solve(options, &problem, &summary);
-
-	if (verbose)
-		std::cout << summary.FullReport() << "\n";
-	
-	// Updating 3D points and camera poses
-	for (int i = fn - n; i < fn; i++)
-	{
-		if (i == 0)
-			continue;
-
-		double __t[] = { tr_opt[i][3] , tr_opt[i][4] , tr_opt[i][5] };
-		double __rod[] = { tr_opt[i][0] , tr_opt[i][1] , tr_opt[i][2] };
-
-		cv::Mat _R = cv::Mat_<double>(3, 3);
-		cv::Mat _t = cv::Mat_<double>(3, 1, __t);
-		cv::Mat rod = cv::Mat_<double>(3, 1, __rod);
-		cv::Rodrigues(rod, _R);
-		cv::transpose(_R, _R);
-
-		R[i] = _R.clone();
-		t[i] = -_t.clone();
-
-		for (auto& p : p3d_opt)
-		{
-			p.first->update(p.second[0], p.second[1], p.second[2]);
-		}
-	}
-}
-
 void Tracker::initialise()
 {
 	int i = 0;
@@ -575,9 +490,8 @@ void Tracker::parsePoses(std::string filename)
 	f_poses.open(filename);
 
 	if (!f_poses)
-	{
 		throw TrackerException("Unable to open pose file");
-	}
+
 	std::string pose;
 	int k = 0;
 
@@ -647,9 +561,8 @@ void Tracker::parseCalibration(std::string filename, int num_calib)
 	f_calib.open(filename);
 
 	if (!f_calib)
-	{
 		throw TrackerException("Unable to open calibration file");
-	}
+
 	std::string calib;
 	int i = 0;
 

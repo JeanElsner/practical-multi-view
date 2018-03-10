@@ -24,7 +24,7 @@ public:
 		@param n Size of neighborhood
 		@return A list of the nearest neighbors
 	**/
-	std::vector<Feature> kNNFeatureMatcher::getNearestNeighbors(
+	std::vector<Feature> getNearestNeighbors(
 		Feature& f, const std::vector<Feature>& feats, int n = 7);
 
 	/**
@@ -38,7 +38,7 @@ public:
 		@param cmp_y The feature's y coordinate in the target image
 		@return Average pixel error between the windows
 	**/
-	float kNNFeatureMatcher::compareFeatures(
+	float compareFeatures(
 		const cv::Mat& src, int src_x, int src_y, const cv::Mat& cmp, int cmp_x, int cmp_y);
 };
 #endif

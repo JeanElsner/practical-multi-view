@@ -1,6 +1,6 @@
 #ifndef TRACKER_H
 #define TRACKER_H
-#include "Feature.h";
+#include "Feature.h"
 #include "Frame.h"
 #include "BaseFeatureExtractor.h"
 #include "BaseFeatureMatcher.h"
@@ -129,10 +129,10 @@ public:
 		GridSection(Frame frame, int x, int y): frame(frame), x(x), y(y) { }
 	};
 
-	class TrackerException : public std::exception
+	class TrackerException : public std::runtime_error
 	{
 	public:
-		TrackerException(const char* msg): std::exception(msg) { }
+		TrackerException(const char* msg): std::runtime_error(msg) { }
 	};
 
 	/**
@@ -255,7 +255,6 @@ private:
 	struct Job
 	{
 		int frame;
-		std::vector<Frame> frames;
 	};
 
 	dlib::pipe<Job> job_pipe;

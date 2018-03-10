@@ -9,6 +9,13 @@ Watch the pipeline run on the KITTI benchmark on [Youtube](https://www.youtube.c
 * Ceres
 
 * Dlib
+## Build
+```
+mkdir build
+cdir build
+cmake ..
+make
+```
 ## Configuration
 Run binary with path to configuration file as argument. The configuration may look like this:
 ```

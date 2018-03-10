@@ -11,7 +11,7 @@ class Feature
 {
 public:
 	// Feature extractor that found the feature
-	const enum extractor { shi_tomasi, cv_good };
+	enum extractor { shi_tomasi, cv_good };
 
 	int row = 0;
 	int column = 0;

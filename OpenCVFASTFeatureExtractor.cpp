@@ -1,5 +1,5 @@
 #include "OpenCVFASTFeatureExtractor.h"
-#include "Tracker.h";
+#include "Tracker.h"
 
 std::vector<Feature> OpenCVFASTFeatureExtractor::extractFeatures(Frame& src, int max)
 {

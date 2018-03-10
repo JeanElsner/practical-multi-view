@@ -15,9 +15,8 @@ int main(int argc, char** argv)
 		video = cv::VideoWriter(tracker.video_path, CV_FOURCC('M', 'J', 'P', 'G'), 10, tracker.frames[0].orig.size());
 
 		for (auto& f : tracker.frames)
-		{
 			video.write(f.orig);
-		}
+
 		video.release();
 	}
 	catch (Tracker::TrackerException &e)

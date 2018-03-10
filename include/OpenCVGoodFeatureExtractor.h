@@ -16,6 +16,6 @@ public:
 		quality(quality), 
 		min_distance(min_distance) { }
 
-	virtual std::vector<Feature> extractFeatures(Frame& src, int max);
+	std::vector<Feature> extractFeatures(Frame& src, int max);
 };
 #endif

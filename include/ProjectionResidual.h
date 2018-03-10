@@ -25,7 +25,7 @@ public:
 		@param camera Camera matrix
 		@return The associated cost function
 	**/
-	static ceres::CostFunction* ProjectionResidual::Create(
+	static ceres::CostFunction* Create(
 		const double* p2d,
 		const double* camera);
 	

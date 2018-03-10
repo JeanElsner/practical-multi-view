@@ -19,6 +19,8 @@ void CeresBundleAdjustment::apply(Frame & f)
 
 	for (int i = fn - n; i < fn; i++)
 	{
+		if (i == 0)
+			continue;
 		Frame* frame = &tracker->frames[i];
 
 		cv::Mat rod = cv::Mat_<double>(3, 1);
@@ -30,9 +32,6 @@ void CeresBundleAdjustment::apply(Frame & f)
 			rod.at<double>(0), rod.at<double>(1), rod.at<double>(2),
 			-tracker->t[i].at<double>(0), -tracker->t[i].at<double>(1), -tracker->t[i].at<double>(2)
 		};
-
-		if (i == 0)
-			continue;
 
 		for (auto& p : frame->map)
 		{
