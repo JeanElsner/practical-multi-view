@@ -1,13 +1,13 @@
 #ifndef CERES_BUNDLE_ADJUSTMENT_H
 #define CERES_BUNDLE_ADJUSTMENT_H
-#include "Tracker.h"
+#include "OdometryPipeline.h"
 
 class CeresBundleAdjustment : public BaseOptimizer
 {
 public:
-	Tracker* tracker;
+	OdometryPipeline* tracker;
 
-	CeresBundleAdjustment(Tracker* tracker) : tracker(tracker) {}
+	CeresBundleAdjustment(OdometryPipeline* tracker) : tracker(tracker) {}
 
 	void apply(Frame& f);
 };

@@ -4,7 +4,7 @@
 #include <opencv2/core.hpp>
 #include <vector>
 #include <iostream>
-//#include "Frame.h"
+#include <memory>
 
 // Class describing an interesting feature (corner) in an image
 class Feature
@@ -27,10 +27,21 @@ public:
 
 	struct Hasher
 	{
-		std::size_t operator()(const Feature& f) const
+		std::size_t operator()(const std::weak_ptr<Feature> f) const
 		{
-			size_t const h1(std::hash<std::string>{}(std::to_string(f.column)));
-			size_t const h2(std::hash<std::string>{}(std::to_string(f.row)));
+			if (f.expired())
+				return 0;
+			std::shared_ptr<Feature> f_ptr = f.lock();
+			size_t const h1(std::hash<std::string>{}(std::to_string(f_ptr->column)));
+			size_t const h2(std::hash<std::string>{}(std::to_string(f_ptr->row)));
+
+			return h1 ^ (h2 << 1);
+		}
+
+		std::size_t operator()(const std::shared_ptr<Feature> f) const
+		{
+			size_t const h1(std::hash<std::string>{}(std::to_string(f->column)));
+			size_t const h2(std::hash<std::string>{}(std::to_string(f->row)));
 
 			return h1 ^ (h2 << 1);
 		}
@@ -57,6 +68,8 @@ public:
 	friend bool operator!= (const Feature& lhs, const Feature& rhs);
 	friend bool operator>(const Feature& lhs, const Feature& rhs);
 
+	friend bool operator== (const std::weak_ptr<Feature> lhs, const std::weak_ptr<Feature> rhs);
+
 	/**
 		Scale this feature's coordinates by a factor
 
@@ -71,22 +84,5 @@ public:
 	*/
 	static void scale(std::vector<Feature>& feats, float scale);
 };
-
-/*namespace std {
-
-	template <>
-	struct hash<Feature>
-	{
-		std::size_t operator()(const Feature& f) const
-		{
-			using std::size_t;
-			using std::hash;
-			using std::string;
-
-			return hash<string>()(std::to_string(f.column))
-				^ (hash<string>()(std::to_string(f.row)) << 1);
-		}
-	};
-}*/
 
 #endif

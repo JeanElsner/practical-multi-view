@@ -22,9 +22,9 @@ private:
 	Frame() { }
 
 public:
-	std::unordered_map<Feature, std::weak_ptr<Feature3D>, Feature::Hasher> map;
+	std::unordered_map<std::shared_ptr<Feature>, std::weak_ptr<Feature3D>, Feature::Hasher> map;
 
-	std::unordered_map < Feature, Feature, Feature::Hasher> feat_corr;
+	std::unordered_map < std::weak_ptr<Feature>, std::weak_ptr<Feature>, Feature::Hasher> feat_corr;
 
 	// Original image and black and white version
 	cv::Mat orig, bw;
@@ -92,14 +92,6 @@ public:
 		@return Number of tracked points
 	**/
 	int count3DPoints();
-
-	/**
-		Get a 2D feature corresponding to the given 3D point
-
-		@param f3d A 3D feature point
-		@return 2D feature
-	**/
-	Feature get2DFeature(std::weak_ptr<Feature3D>& f3d);
 
 	/**
 		Checks whether a feature has any neighbors within

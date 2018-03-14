@@ -1,18 +1,25 @@
 #include "OpenCVFivePointTri.h"
 #include <opencv2/calib3d.hpp>
-#include "Tracker.h"
+#include "OdometryPipeline.h"
 
 void OpenCVFivePointTri::triangulate(Frame & src, Frame & next, cv::Mat & R_out, cv::Mat & t_out)
 {
 	int j = src.frame;
 	std::vector<cv::Point> p1, p2;
+	std::vector<std::shared_ptr<Feature>> p1_ptr, p2_ptr;
+
 	cv::Mat mask, tri;
 
 	for (auto& p : src.feat_corr)
 	{
-		Feature f = p.first;
-		p1.push_back(f.getPoint());
-		p2.push_back(p.second.getPoint());
+		if (p.first.expired() || p.second.expired())
+			continue;
+		std::shared_ptr<Feature> fst = p.first.lock();
+		std::shared_ptr<Feature> sec = p.second.lock();
+		p1.push_back(fst->getPoint());
+		p2.push_back(sec->getPoint());
+		p1_ptr.push_back(fst);
+		p2_ptr.push_back(sec);
 	}
 	cv::Mat E = cv::findEssentialMat(p1, p2, tracker->camera, cv::RANSAC, 0.99, 1, mask);
 
@@ -40,8 +47,8 @@ void OpenCVFivePointTri::triangulate(Frame & src, Frame & next, cv::Mat & R_out,
 		{
 			f3d_ptr->transform(tracker->R[j], tracker->t[j]);
 			tracker->feats3d.push_back(f3d_ptr);
-			next.map[Feature(p2[i].x, p2[i].y)] = std::weak_ptr<Feature3D>(f3d_ptr);
-			src.map[Feature(p1[i].x, p1[i].y)] = std::weak_ptr<Feature3D>(f3d_ptr);
+			next.map[p2_ptr[i]] = std::weak_ptr<Feature3D>(f3d_ptr);
+			src.map[p1_ptr[i]] = std::weak_ptr<Feature3D>(f3d_ptr);
 		}
 	}
 }

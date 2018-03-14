@@ -8,9 +8,7 @@ BaseFeatureMatcher::fmap OpenCVLucasKanadeFM::matchFeatures(Frame & src, Frame &
 	std::vector<cv::Point2f> prev_points, next_points;
 
 	for (auto const& p : src.map)
-	{
-		prev_points.push_back(cv::Point2f(p.first.column, p.first.row));
-	}
+		prev_points.push_back(cv::Point2f(p.first->column, p.first->row));
 
 	std::vector<uchar> status;
 	std::vector<float> err;
@@ -24,8 +22,8 @@ BaseFeatureMatcher::fmap OpenCVLucasKanadeFM::matchFeatures(Frame & src, Frame &
 			continue;
 		if (status[i])
 		{
-			Feature f = Feature(next_points[i].x, next_points[i].y);
-			next.map[f] = std::weak_ptr<Feature3D>(p.second);
+			std::shared_ptr<Feature> f = std::make_shared<Feature>(Feature(next_points[i].x, next_points[i].y));
+			next.map[f] = p.second;
 			correspondences[p.first] = f;
 		}
 		i++;

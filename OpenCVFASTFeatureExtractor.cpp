@@ -1,5 +1,5 @@
 #include "OpenCVFASTFeatureExtractor.h"
-#include "Tracker.h"
+#include "OdometryPipeline.h"
 
 std::vector<Feature> OpenCVFASTFeatureExtractor::extractFeatures(Frame& src, int max)
 {

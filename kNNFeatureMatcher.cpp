@@ -4,7 +4,7 @@ BaseFeatureMatcher::fmap kNNFeatureMatcher::matchFeatures(Frame & src, Frame & n
 {
 	fmap map;
 	double avg = 0;
-	std::vector<Feature> new_feats, old_feats;
+	std::vector<std::shared_ptr<Feature>> new_feats, old_feats;
 	std::vector<bool> tracked;
 
 	std::vector<Feature> cmp_feats = extractor->extractFeatures(next, 1000);
@@ -14,13 +14,13 @@ BaseFeatureMatcher::fmap kNNFeatureMatcher::matchFeatures(Frame & src, Frame & n
 
 	for (auto& f: old_feats)
 	{
-		std::vector<Feature> nn = getNearestNeighbors(f, cmp_feats);
+		std::vector<Feature> nn = getNearestNeighbors(*f, cmp_feats);
 		Feature best_fit;
 		float err = 0;
 
 		for (auto const& ff : nn)
 		{
-			float _err = compareFeatures(src.bw, f.column, f.row, next.bw, ff.column, ff.row);
+			float _err = compareFeatures(src.bw, f->column, f->row, next.bw, ff.column, ff.row);
 
 			if (_err < err || err == 0)
 			{
@@ -32,29 +32,29 @@ BaseFeatureMatcher::fmap kNNFeatureMatcher::matchFeatures(Frame & src, Frame & n
 		{
 			tracked.push_back(true);
 			best_fit.tracked = true;
-			best_fit.displacement = f.distance(best_fit);
+			best_fit.displacement = f->distance(best_fit);
 			avg += best_fit.displacement;
 		}
 		else
 			tracked.push_back(false);
-		new_feats.push_back(best_fit);
+		new_feats.push_back(std::make_shared<Feature>(best_fit));
 	}
 	avg /= (double)new_feats.size();
 
 	for (auto& f : new_feats)
 	{
-		if (f.displacement > 3 * avg)
+		if (f->displacement > 3 * avg)
 		{
-			f.tracked = false;
+			f->tracked = false;
 		}
 	}
 
 	for (int i = 0; i < old_feats.size(); i++)
 	{
-		if (new_feats[i].tracked)
+		if (new_feats[i]->tracked)
 		{
-			map[old_feats[i]] = new_feats[i];
 			next.map[new_feats[i]] = src.map[old_feats[i]];
+			map[old_feats[i]] = new_feats[i];
 		}
 	}
 	return map;

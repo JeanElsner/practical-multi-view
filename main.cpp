@@ -1,6 +1,6 @@
 #include <opencv2/highgui.hpp>
 #include <iostream>
-#include "Tracker.h"
+#include "OdometryPipeline.h"
 
 int main(int argc, char** argv)
 {
@@ -8,20 +8,20 @@ int main(int argc, char** argv)
 		return -1;
 	try
 	{
-		Tracker tracker(argv[1]);
+		OdometryPipeline tracker(argv[1]);
 		tracker.startPipeline();
 
 		cv::VideoWriter video;
-		video = cv::VideoWriter(tracker.video_path, CV_FOURCC('M', 'J', 'P', 'G'), 10, tracker.frames[0].orig.size());
+		video = cv::VideoWriter(tracker.video_path, CV_FOURCC('M', 'J', 'P', 'G'), 10, tracker.frames[0]->orig.size());
 
 		for (auto& f : tracker.frames)
-			video.write(f.orig);
+			video.write(f->orig);
 
 		video.release();
 	}
-	catch (Tracker::TrackerException &e)
+	catch (OdometryPipeline::OdometryPipelineException &e)
 	{
-		std::cerr << e.what() << std::endl << "Tracker configuration failed";
+		std::cerr << e.what() << std::endl << "Odometry Pipeline configuration failed";
 		return -1;
 	}
 	return 0;

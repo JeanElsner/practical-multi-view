@@ -15,7 +15,10 @@ void OpenCVEPnPSolver::solvePnP(Frame& src, Frame& next, cv::Mat& R_out, cv::Mat
 		if (p.second.expired())
 			continue;
 		std::shared_ptr<Feature3D> f3d = p.second.lock();
-		Feature f = src.feat_corr[p.first];
+
+		if (src.feat_corr[p.first].expired())
+			continue;
+		std::shared_ptr<Feature> f = src.feat_corr[p.first].lock();
 		next.map[f] = std::weak_ptr<Feature3D>(f3d);
 		f3d->transformInv(tracker->R[j], tracker->t[j]);
 
@@ -23,7 +26,7 @@ void OpenCVEPnPSolver::solvePnP(Frame& src, Frame& next, cv::Mat& R_out, cv::Mat
 		p3f.z *= -1;
 
 		obj_points.push_back(p3f);
-		img_points.push_back(f.getPoint());
+		img_points.push_back(f->getPoint());
 
 		f3d->transform(tracker->R[j], tracker->t[j]);
 		local_feats3d.push_back(f3d);

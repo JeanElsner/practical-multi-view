@@ -21,7 +21,7 @@ void CeresBundleAdjustment::apply(Frame & f)
 	{
 		if (i == 0)
 			continue;
-		Frame* frame = &tracker->frames[i];
+		std::shared_ptr<Frame> frame = tracker->frames[i];
 
 		cv::Mat rod = cv::Mat_<double>(3, 1);
 		cv::Mat R_transpose = cv::Mat_<double>(3, 3);
@@ -38,11 +38,11 @@ void CeresBundleAdjustment::apply(Frame & f)
 			if (p.second.expired())
 				continue;
 			std::shared_ptr<Feature3D> f3d = p.second.lock();
-			Feature f = p.first;
+			std::shared_ptr<Feature> f = p.first;
 
 			cv::Point3f p3f = f3d->getPoint();
 
-			p2d[i] = new double[2]{ (double)f.column, (double)f.row };
+			p2d[i] = new double[2]{ (double)f->column, (double)f->row };
 
 			if (!p3d_opt.count(f3d))
 				p3d_opt[f3d] = new double[3]{ p3f.x, p3f.y, p3f.z };

@@ -10,7 +10,7 @@ class BaseFeatureMatcher
 {
 public:
 
-	typedef std::unordered_map < Feature, Feature, Feature::Hasher> fmap;
+	typedef std::unordered_map < std::weak_ptr<Feature>, std::weak_ptr<Feature>, Feature::Hasher> fmap;
 
 	/**
 		Match a set of features from one frame and

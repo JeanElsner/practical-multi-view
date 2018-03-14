@@ -44,3 +44,12 @@ bool operator>(const Feature& lhs, const Feature& rhs)
 {
 	return (lhs.score > rhs.score);
 }
+
+bool operator==(const std::weak_ptr<Feature> lhs, const std::weak_ptr<Feature> rhs)
+{
+	if (lhs.expired() || rhs.expired())
+		return false;
+	std::shared_ptr<Feature> lhs_ptr = lhs.lock();
+	std::shared_ptr<Feature> rhs_ptr = rhs.lock();
+	return (lhs_ptr->column == rhs_ptr->column && lhs_ptr->row == rhs_ptr->row);
+}
