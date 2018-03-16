@@ -23,6 +23,7 @@ private:
 
 public:
 	double scale = 1;
+	double map_scale = 1;
 	int init_offset = 0;
 	int min_tracked_features;
 	int tracked_features_tol;
@@ -61,7 +62,7 @@ public:
 
 	std::vector<double> ticktock;
 
-	std::string video_path;
+	std::string video_path, error_path;
 
 	/**
 		Estimate the relative camera pose between the frames

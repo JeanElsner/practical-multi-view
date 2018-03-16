@@ -56,6 +56,8 @@ OdometryPipeline::OdometryPipeline(std::string cfg_path) : job_pipe(605)
 	bundle_size = std::stoi(cfg["bundle_size"]);
 	ba_iterations = std::stoi(cfg["max_iterations"]);
 	video_path = cfg["video_path"];
+	map_scale = std::stod(cfg["map_scale"]);
+	error_path = cfg["error_path"];
 
 	cv::glob(cfg["image_dir"], file_names, false);
 	parseCalibration(cfg["camera_calibration"], std::stoi(cfg["camera"]));
@@ -102,7 +104,7 @@ void OdometryPipeline::drawCross(const int radius, const cv::Point& pos, const c
 void OdometryPipeline::drawMap(Frame& fr)
 {
 	int j = t.size() - 1;
-	map = cv::Mat::zeros(512, 512, CV_8UC3);
+	map = cv::Mat::zeros(511, 511, CV_8UC3);
 
 	// Drawing 3D feature points
 	for (auto& p : fr.map)
@@ -121,13 +123,13 @@ void OdometryPipeline::drawMap(Frame& fr)
 
 		drawCross(3, cv::Point(f->column, f->row), color, fr.orig, 1);
 
-		cv::circle(map, cv::Point(map.cols / 2 + f3d->getPoint().x, map.rows / 1.2 + f3d->getPoint().z), 1, color, -1);
+		cv::circle(map, cv::Point(map.cols / 2 + f3d->getPoint().x*map_scale, map.rows / 1.2 + f3d->getPoint().z*map_scale), 1, color, -1);
 	}
 
 	// Drawing rectangle representing position and orientation
 
-	int x = map.cols / 2 + (int)t[j].at<double>(0);
-	int y = map.rows / 1.2 + (int)t[j].at<double>(2);
+	int x = map.cols / 2 + (int)t[j].at<double>(0) * map_scale;
+	int y = map.rows / 1.2 + (int)t[j].at<double>(2) * map_scale;
 	cv::RotatedRect rRect = cv::RotatedRect(cv::Point2f(x, y), cv::Size2f(10, 15), calcYRotation(R[j]) / 3.1416 * 180);
 	cv::Point2f vertices[4];
 	rRect.points(vertices);
@@ -136,8 +138,8 @@ void OdometryPipeline::drawMap(Frame& fr)
 		cv::line(map, vertices[i], vertices[(i + 1) % 4], cv::Scalar(0, 255, 0));
 
 	// Same as above but for the ground truth
-	x = map.cols / 2 + (int)gt_t[j].at<double>(0);
-	y = map.rows / 1.2 - (int)gt_t[j].at<double>(2);
+	x = map.cols / 2 + (int)gt_t[j+init_offset].at<double>(0) * map_scale;
+	y = map.rows / 1.2 - (int)gt_t[j+init_offset].at<double>(2) * map_scale;
 	rRect = cv::RotatedRect(cv::Point2f(x, y), cv::Size2f(10, 15), calcYRotation(gt_R[j], true) / 3.1416 * 180);
 	rRect.points(vertices);
 
@@ -145,20 +147,21 @@ void OdometryPipeline::drawMap(Frame& fr)
 		cv::line(map, vertices[i], vertices[(i + 1) % 4], cv::Scalar(0, 0, 255));
 
 	// Tracing the path of the calculated trajectory as well as the ground truth on the map
-	for (int i = init_offset; i <= j; i++)
+	for (int i = 0; i <= j; i++)
 	{
-		int x = map.cols / 2 + (int)t[i].at<double>(0);
-		int y = map.rows / 1.2 + (int)t[i].at<double>(2);
+		int x = map.cols / 2 + (int)t[i].at<double>(0) * map_scale;
+		int y = map.rows / 1.2 + (int)t[i].at<double>(2) *map_scale;
 		cv::circle(
 			map,
 			cv::Point(x, y),
 			.5,
 			cv::Scalar(0, 255, 0),
 			2);
-
+		x = map.cols / 2 + (int)gt_t[i + init_offset].at<double>(0) * map_scale;
+		y = map.rows / 1.2 - (int)gt_t[i + init_offset].at<double>(2) * map_scale;
 		cv::circle(
 			map,
-			cv::Point(map.cols / 2 + (int)gt_t[i].at<double>(0), map.rows / 1.2 - (int)gt_t[i].at<double>(2)),
+			cv::Point(x, y),
 			.5,
 			cv::Scalar(0, 0, 255),
 			2);
@@ -254,10 +257,43 @@ void OdometryPipeline::startPipeline()
 	R_s.push_back(_R);
 	t_s.push_back(_t);
 
+	tick();
 	register_thread(*this, &OdometryPipeline::featureExtractionThread);
 	register_thread(*this, &OdometryPipeline::poseEstimationThread);
 	start();
 	wait();
+	double runtime = tock();
+
+	// Calculate error from ground truth
+	std::vector<double> errors_t, errors_R;
+	double err_sum_t = 0, err_sum_R = 0;
+
+	for (int i = 1; i < t.size(); i++)
+	{
+		cv::Mat _gt_t = gt_t[i + init_offset];
+		_gt_t.at<double>(2) *= -1;
+		cv::Mat _gt_R = gt_R[i + init_offset];
+		_gt_R.at<double>(2, 0) *= -1;
+		_gt_R.at<double>(0, 2) *= -1;
+		double t_norm = cv::norm(t[i], _gt_t, cv::NORM_L2);
+		double R_norm = cv::norm(R[i], gt_R[i], cv::NORM_L2);
+		errors_t.push_back(t_norm);
+		errors_R.push_back(R_norm);
+		err_sum_t += t_norm;
+		err_sum_R += R_norm;
+	}
+	std::ofstream f;
+	f.open(error_path);
+	f << "Runtime: " << runtime << std::endl;
+	f << "R total: " << err_sum_R << std::endl;
+	f << "R min: " << *std::min_element(std::begin(errors_R), std::end(errors_R)) << std::endl;
+	f << "R max: " << *std::max_element(std::begin(errors_R), std::end(errors_R)) << std::endl;
+	f << "R std: " << standardDeviation(errors_R) << std::endl;
+	f << "t total: " << err_sum_t << std::endl;
+	f << "t min: " << *std::min_element(std::begin(errors_t), std::end(errors_t)) << std::endl;
+	f << "t max: " << *std::max_element(std::begin(errors_t), std::end(errors_t)) << std::endl;
+	f << "t std: " << standardDeviation(errors_t) << std::endl;
+	f.close();
 
 	// Display 3d point cloud
 	std::vector<dlib::perspective_window::overlay_dot> points;
@@ -266,9 +302,9 @@ void OdometryPipeline::startPipeline()
 	std::vector<double> x, y, z;
 	for (auto& f3d : feats3d)
 	{
-		x.push_back(f3d->getPoint().x);
-		y.push_back(f3d->getPoint().y);
-		z.push_back(f3d->getPoint().z);
+		x.push_back(std::abs(f3d->getPoint().x));
+		y.push_back(std::abs(f3d->getPoint().y));
+		z.push_back(std::abs(f3d->getPoint().z));
 	}
 	double med_x = median(x), med_y = median(y), med_z = median(z);
 
@@ -294,20 +330,23 @@ void OdometryPipeline::addFrame(Frame& frame)
 {
 	frame.frame = frames.size();
 	dlib::auto_mutex locker(frame_mutex);
-	tick();
+	if (verbose)
+		tick();
 	BaseFeatureMatcher::fmap feat_corr = matcher->matchFeatures(*(frames[frame.frame-1]), frame);
 	frames[frame.frame - 1]->feat_corr = feat_corr;
 	locker.unlock();
 
 	if (verbose)
 		std::cout << tock() << " seconds for feature matching in frame #" << frame.frame << std::endl;
-	tick();
 
 	if (feat_corr.size() < tracked_features_tol)
 	{
 		if (verbose)
+		{
+			tick();
 			std::cout << "Trying to find " << min_tracked_features << " new features" <<
-			" in frame #" << (frames.size() - 1) << std::endl;
+				" in frame #" << (frames.size() - 1) << std::endl;
+		}
 		dlib::auto_mutex locker2(frame_mutex);
 		std::vector<GridSection> roi = getGridROI(*(frames[frames.size() - 1]));
 		locker2.unlock();
@@ -336,7 +375,8 @@ void OdometryPipeline::addFrame(Frame& frame)
 
 void OdometryPipeline::estimatePose(Frame& src, Frame &next)
 {
-	tick();
+	if (verbose)
+		tick();
 	int j = src.frame;
 	cv::Mat _R = R[j].clone(), _t = t[j].clone();
 
@@ -346,13 +386,13 @@ void OdometryPipeline::estimatePose(Frame& src, Frame &next)
 	}
 	else
 	{
-		tick();
+		if (verbose)
+			tick();
 		triangulator->triangulate(src, next, _R, _t);
 		init3d = true;
 
 		if (verbose)
 			std::cout << tock() << " seconds for triangulating points." << std::endl;
-		tick();
 	}
 	motionHeuristics(_R, _t, j);
 
@@ -628,7 +668,7 @@ double OdometryPipeline::standardDeviation(std::vector<double> val)
 	for (auto const& v : val)
 		std += std::pow(v - avg, 2);
 
-	return std::sqrt(std);
+	return std::sqrt(std/(val.size()-1));
 }
 
 std::vector<OdometryPipeline::GridSection> OdometryPipeline::getGridROI(Frame& fr)

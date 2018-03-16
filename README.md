@@ -23,6 +23,7 @@ Run binary with path to configuration file as argument. The configuration may lo
 fancy_video = 1
 verbose     = 1
 video_path  = ../../../tracker.avi
+error_path  = ../../../error.txt
 [Odometry]
 ; When extracting 2d features, tries to extract at least this amount
 min_tracked_features = 400
@@ -31,11 +32,11 @@ tracked_features_tol = 150
 ; Number of frames used to initialise odometry pipeline
 init_frames          = 5
 ; Number of frames to track
-frames               = 500
+frames               = 600
 ; Number of frames used for bundle adjustment
-bundle_size          = 20
+bundle_size          = 5
 [ceres]
-max_iterations = 2
+max_iterations = 5
 [KITTI]
 image_dir          = D:\Odometry\dataset\sequences\07\image_0
 ; Number of camera in calibration file

@@ -11,13 +11,16 @@ int main(int argc, char** argv)
 		OdometryPipeline tracker(argv[1]);
 		tracker.startPipeline();
 
-		cv::VideoWriter video;
-		video = cv::VideoWriter(tracker.video_path, CV_FOURCC('M', 'J', 'P', 'G'), 10, tracker.frames[0]->orig.size());
+		if (tracker.fancy_video)
+		{
+			cv::VideoWriter video;
+			video = cv::VideoWriter(tracker.video_path, CV_FOURCC('M', 'J', 'P', 'G'), 10, tracker.frames[0]->orig.size());
 
-		for (auto& f : tracker.frames)
-			video.write(f->orig);
+			for (auto& f : tracker.frames)
+				video.write(f->orig);
 
-		video.release();
+			video.release();
+		}
 	}
 	catch (OdometryPipeline::OdometryPipelineException &e)
 	{

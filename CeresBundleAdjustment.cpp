@@ -53,7 +53,8 @@ void CeresBundleAdjustment::apply(Frame & f)
 	}
 	ceres::Solver::Options options;
 	options.linear_solver_type = ceres::SPARSE_SCHUR;
-	options.minimizer_progress_to_stdout = true;
+	if (tracker->verbose)
+		options.minimizer_progress_to_stdout = true;
 	options.num_threads = 4;
 	options.max_num_iterations = tracker->ba_iterations;
 	ceres::Solver::Summary summary;
